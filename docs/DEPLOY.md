@@ -4,7 +4,7 @@
 
 | Target | How | Status |
 |---|---|---|
-| Hugging Face Space (Docker SDK, port 7860) | GitHub Actions `deploy` job uploads the repo; the Space builds the root `Dockerfile` (API + UI + RQ worker + Redis + Chroma server under supervisord) | Image **built and smoke-tested locally** (3.46GB, CPU torch); deploy workflow **needs your Space + secrets** (below) |
+| Hugging Face Space (Docker SDK, port 7860) | GitHub Actions `deploy` job uploads the repo; the Space builds the root `Dockerfile` (API + UI + RQ worker + Redis + Chroma server under supervisord) | Image **built and smoke-tested locally** (3.57GB after Phase 8b, CPU torch); deploy workflow **needs your Space + secrets** (below) |
 | Local multi-service | `docker compose up --build` (api, worker, redis, chroma) | **Run locally**: all 4 services healthy, startup ingestion indexed 12/12 docs (`reports/docker_smoke.json`) |
 | Kubernetes | `k8s/` manifests | Written; **not tested on kind** |
 

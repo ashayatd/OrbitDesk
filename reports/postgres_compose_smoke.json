@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-09",
+  "stack": "docker compose: api + worker + redis + postgres (pgvector/pgvector:pg17)",
+  "services_healthy": [
+    "api",
+    "postgres",
+    "redis",
+    "worker"
+  ],
+  "startup_ingest": "12/12 docs indexed into pgvector (table chunks_orbitdesk: 91 rows)",
+  "search_VPN-809_top_hit": "vpn-setup|4.1 Error VPN-809: Gateway Unreachable (stage db_hybrid_search = vector + full-text + RRF in one SQL query)",
+  "seeded_tickets": 24,
+  "analytics_role_created": "orbitdesk_analytics",
+  "mcp_over_http": {
+    "no_token_status": 401,
+    "tools_listed": [
+      "search_policies",
+      "get_ticket_status",
+      "ticket_analytics"
+    ],
+    "get_ticket_status_TCK-1002_as_it_admin": "status=open",
+    "search_policies_without_llm_key": "clean error: GROQ_API_KEY is not set"
+  },
+  "concurrent_http_confirms": {
+    "requests": 5,
+    "created": 1,
+    "duplicate": 4,
+    "tickets_in_db": 1,
+    "pending_action_status": "executed"
+  }
+}

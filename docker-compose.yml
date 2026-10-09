@@ -1,6 +1,8 @@
-# Local multi-service run: separate api, worker, redis and chroma containers.
-#   docker compose up --build        ->  http://localhost:8000/ui
-# The api ingests data/docs at startup into the chroma service (unchanged docs are skipped).
+# Local multi-service run: api, worker, redis and postgres (with pgvector).
+#   docker compose up --build        ->  http://localhost:8000/ui   (MCP: http://localhost:8000/mcp/)
+# Postgres holds employees, leave, tickets, pending actions, logs AND the vectors (pgvector) + full-text
+# index, so hybrid search runs inside one database. The api ingests data/docs at startup (unchanged docs
+# are skipped by content hash).
 services:
   redis:
     image: redis:7-alpine
@@ -10,12 +12,18 @@ services:
       interval: 5s
       retries: 10
 
-  chroma:
-    image: chromadb/chroma:1.5.9   # same version as the chromadb client in uv.lock
+  postgres:
+    image: pgvector/pgvector:pg17   # Postgres 17 + the pgvector extension
+    environment:
+      POSTGRES_USER: orbit
+      POSTGRES_PASSWORD: orbit       # local demo only; use a secret in any shared environment
+      POSTGRES_DB: orbitdesk
     volumes:
-      - chroma-data:/data
+      - pg-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000' || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U orbit -d orbitdesk"]
       interval: 5s
       retries: 20
 
@@ -33,14 +41,16 @@ services:
         required: false
     environment: &app-env
       REDIS_URL: redis://redis:6379/0
-      CHROMA_URL: http://chroma:8000
+      DATABASE_URL: postgresql+psycopg://orbit:orbit@postgres:5432/orbitdesk
+      VECTOR_BACKEND: auto          # -> pgvector, because DATABASE_URL is set
       QUEUE_MODE: rq
-      DATA_DIR: /var/orbitdesk     # SQLite (employees, tickets, logs) shared by api + worker
+      MCP_URL: http://127.0.0.1:8000/mcp/
+      DATA_DIR: /var/orbitdesk     # uploads only (all records live in Postgres)
     volumes:
       - app-data:/var/orbitdesk
     depends_on:
       redis: {condition: service_healthy}
-      chroma: {condition: service_healthy}
+      postgres: {condition: service_healthy}
 
   worker:
     build: .
@@ -56,8 +66,8 @@ services:
       - app-data:/var/orbitdesk
     depends_on:
       redis: {condition: service_healthy}
-      chroma: {condition: service_healthy}
+      postgres: {condition: service_healthy}
 
 volumes:
-  chroma-data:
+  pg-data:
   app-data:

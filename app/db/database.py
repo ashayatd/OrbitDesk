@@ -171,9 +171,14 @@ def database_url(path: Path | None = None) -> str:
     return s.database_url or f"sqlite:///{s.db_path.as_posix()}"
 
 
-@lru_cache(maxsize=16)
 def get_engine(url: str | None = None) -> Engine:
-    url = url or database_url()
+    """Engine for `url`, or for the current DATABASE_URL / SQLite default. The cache is keyed by the
+    RESOLVED url: caching get_engine() under None would pin whichever database was asked for first."""
+    return _engine(url or database_url())
+
+
+@lru_cache(maxsize=16)
+def _engine(url: str) -> Engine:
     if url.startswith("sqlite"):
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
         engine = create_engine(url, connect_args={"timeout": 15, "check_same_thread": False})

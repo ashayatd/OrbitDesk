@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.cache.index_version import get_index_version
 from app.config import get_settings
 from app.infra.redis_client import get_redis, redis_ok
+from app.retrieval.vectorstore import resolve_backend
 
 router = APIRouter(tags=["health"])
 
@@ -25,7 +26,8 @@ def health() -> dict:
         "llm_available": s.llm_available,
         "redis_ok": ok,
         "index_version": get_index_version(get_redis()) if ok else None,
-        "vector_backend": s.vector_backend,
+        "vector_backend": resolve_backend(),  # what "auto" resolved to
+        "database": "postgres" if s.database_url else "sqlite (fallback)",
         "indexed_chunks": _store_chunks(),
         "prompt_version": s.prompt_version,
         "router_mode": s.router_mode,

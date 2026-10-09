@@ -37,6 +37,13 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:  # integration tests + pgvector leak test run against a real Postgres with pgvector
+        image: pgvector/pgvector:pg17
+        env: {POSTGRES_USER: orbit, POSTGRES_PASSWORD: orbit, POSTGRES_DB: orbitdesk}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U orbit -d orbitdesk" --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
         with: {ref: "${{ inputs.ref || github.sha }}"}
@@ -44,11 +51,25 @@ jobs:
         with: {version: "${{ env.UV_VERSION }}", python-version: "${{ env.PYTHON_VERSION }}", enable-cache: true}
       - run: uv sync --frozen
       # No API keys in CI on purpose: the suite must pass with every key empty.
-      - run: uv run pytest -q
+      # Unit tests use SQLite; tests marked `postgres` use the service container via TEST_DATABASE_URL.
+      - name: Tests (SQLite unit + Postgres integration)
+        env: {TEST_DATABASE_URL: "postgresql+psycopg://orbit:orbit@localhost:5432/orbitdesk"}
+        run: uv run pytest -q
+      - name: Tests again with the agent's tools loaded through the MCP server
+        env: {TOOLS_VIA_MCP: "true"}
+        run: uv run pytest -q
 
   eval-gate:
-    # Fails the build if recall@5 / MRR regress below evals/gate.json or ANY access-control leak appears.
+    # Fails the build if recall@5 / MRR regress below evals/gate.json or ANY access-control leak appears
+    # (leak test runs on Chroma, LlamaIndex and pgvector).
     runs-on: ubuntu-latest
+    services:
+      postgres:  # integration tests + pgvector leak test run against a real Postgres with pgvector
+        image: pgvector/pgvector:pg17
+        env: {POSTGRES_USER: orbit, POSTGRES_PASSWORD: orbit, POSTGRES_DB: orbitdesk}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U orbit -d orbitdesk" --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
         with: {ref: "${{ inputs.ref || github.sha }}"}
@@ -58,9 +79,11 @@ jobs:
         with:
           path: ~/.cache/huggingface
           key: hf-models-${{ hashFiles('app/config.py') }}
-      - run: uv sync --frozen
+      - run: uv sync --frozen --group llamaindex
       - name: Retrieval eval + leak test (no API key needed)
-        env: {REDIS_URL: "fakeredis://"}
+        env:
+          REDIS_URL: "fakeredis://"
+          EVAL_DATABASE_URL: "postgresql+psycopg://orbit:orbit@localhost:5432/orbitdesk"
         run: uv run python evals/retrieval_eval.py --gate
       - name: Every number quoted in the docs exists in reports/
         run: uv run python scripts/check_doc_numbers.py

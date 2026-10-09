@@ -1,7 +1,6 @@
 {
   "date": "2026-10-09",
   "image": "orbitdesk:local (root Dockerfile, the HF Space image)",
-  "image_size_docker_desktop": "3.46GB",
   "image_size_before_uv_no_cache_fix": "5.6GB",
   "uv_cache_removed_from_layer": "1.6G",
   "torch": "2.14.1+cpu (cuda available: False)",
@@ -27,5 +26,14 @@
     "startup_ingest_indexed": 12,
     "search_hotel_London_top_hit": "travel-reimbursement|2.2 Hotels"
   },
-  "kind_k8s": "not tested (kind not installed)"
+  "kind_k8s": "not tested (kind not installed)",
+  "image_size_before_phase8b": "3.46GB",
+  "image_size_docker_desktop": "3.57GB",
+  "phase8b_fallback_check": {
+    "database": "sqlite (fallback)",
+    "log_event": "database_fallback_sqlite",
+    "vector_backend": "chroma",
+    "indexed_chunks": 91,
+    "mcp_without_token_status": 401
+  }
 }
