@@ -1,6 +1,7 @@
 """Test setup: no API keys, in-process fake Redis, temp data dir."""
 
 import os
+import tempfile
 
 import pytest
 
@@ -15,6 +16,7 @@ os.environ.update(
         "REDIS_URL": "fakeredis://",
         "QUEUE_MODE": "inline",
         "INGEST_ON_STARTUP": "false",
+        "DATA_DIR": tempfile.mkdtemp(prefix="orbitdesk-test-"),  # never touch the real data/ dir
     }
 )
 
@@ -25,3 +27,10 @@ def _flush_redis():
 
     get_redis().flushall()
     yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _seed_db():
+    from app.db.seed import seed
+
+    seed()

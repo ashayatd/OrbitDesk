@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from app.api import ask, health, ingest
+from app.api import agent, ask, health, ingest
 from app.config import get_settings
 from app.errors import InputRejectedError, LLMUnavailableError, RateLimitedError
 from app.log import configure_logging, get_logger
@@ -32,9 +32,7 @@ def _startup_ingest() -> None:
 
     try:
         results = ingest_manifest()
-        log.info(
-            "startup_ingest_done", indexed=sum(r["status"] == "indexed" for r in results), total=len(results)
-        )
+        log.info("startup_ingest_done", indexed=sum(r["status"] == "indexed" for r in results), total=len(results))
     except Exception:
         log.exception("startup_ingest_failed")
 
@@ -45,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(ingest.router)
     app.include_router(ask.router)
+    app.include_router(agent.router)
 
     @app.exception_handler(LLMUnavailableError)
     async def _llm_unavailable(_: Request, exc: LLMUnavailableError) -> JSONResponse:

@@ -78,9 +78,7 @@ def ingest_document(
     h = content_hash(path, meta)
 
     def unchanged() -> bool:
-        return (
-            not force and _registered_hash(meta.doc_id, db_path) == h and bool(store.ids_for_doc(meta.doc_id))
-        )
+        return not force and _registered_hash(meta.doc_id, db_path) == h and bool(store.ids_for_doc(meta.doc_id))
 
     if unchanged():  # cheap check before taking the lock
         return IngestResult(meta.doc_id, "skipped_unchanged", content_hash=h)

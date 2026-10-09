@@ -50,9 +50,7 @@ def seed(path=None) -> None:
         conn.executemany("INSERT OR IGNORE INTO employees VALUES (?,?,?,?,?,?)", EMPLOYEES)
         for emp, balances in LEAVE.items():
             for leave_type, (entitled, used) in balances.items():
-                conn.execute(
-                    "INSERT OR IGNORE INTO leave_balances VALUES (?,?,?,?)", (emp, leave_type, entitled, used)
-                )
+                conn.execute("INSERT OR IGNORE INTO leave_balances VALUES (?,?,?,?)", (emp, leave_type, entitled, used))
         conn.executemany(
             "INSERT OR IGNORE INTO tickets (id, employee_id, title, description, category, priority, status)"
             " VALUES (?,?,?,?,?,?,?)",

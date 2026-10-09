@@ -29,9 +29,7 @@ def corpus_texts() -> list[str]:
     emb = get_embedder()
     texts = []
     for meta in load_manifest(s.docs_dir / "manifest.yaml"):
-        chunks = chunk_document(
-            parse_file(s.docs_dir / meta.file), meta, "bench", emb.count_tokens, s.chunk_size
-        )
+        chunks = chunk_document(parse_file(s.docs_dir / meta.file), meta, "bench", emb.count_tokens, s.chunk_size)
         texts += [c.text for c in chunks]
     return texts
 
@@ -53,9 +51,7 @@ def main() -> None:
     for _ in range(REPEATS):
         runs["one_by_one"].append(time_it(lambda: [emb.embed_documents([t], batch_size=1) for t in texts]))
     for bs in BATCH_SIZES:
-        runs[f"batch_{bs}"] = [
-            time_it(lambda bs=bs: emb.embed_documents(texts, batch_size=bs)) for _ in range(REPEATS)
-        ]
+        runs[f"batch_{bs}"] = [time_it(lambda bs=bs: emb.embed_documents(texts, batch_size=bs)) for _ in range(REPEATS)]
 
     results = {}
     for name, secs in runs.items():

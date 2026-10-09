@@ -16,9 +16,7 @@ class Usage:
     estimated: bool = False  # True if a provider didn't report usage and we approximated it
     calls: list[dict] = field(default_factory=list)
 
-    def add(
-        self, stage: str, model: str, input_tokens: int, output_tokens: int, estimated: bool = False
-    ) -> None:
+    def add(self, stage: str, model: str, input_tokens: int, output_tokens: int, estimated: bool = False) -> None:
         self.input_tokens += input_tokens
         self.output_tokens += output_tokens
         cost = token_cost(model, input_tokens, output_tokens)

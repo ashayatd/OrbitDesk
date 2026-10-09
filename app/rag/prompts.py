@@ -37,9 +37,7 @@ def build_answer_messages(question: str, chunks: list[ScoredChunk], version: str
     p = load_prompt("answer", version)
     msgs: list[BaseMessage] = [SystemMessage(p["system"])]
     for ex in p.get("few_shot") or []:
-        msgs.append(
-            HumanMessage(p["user_template"].format(context=ex["context"].strip(), question=ex["question"]))
-        )
+        msgs.append(HumanMessage(p["user_template"].format(context=ex["context"].strip(), question=ex["question"])))
         msgs.append(AIMessage(ex["answer"].strip()))
     msgs.append(HumanMessage(p["user_template"].format(context=format_context(chunks), question=question)))
     return msgs

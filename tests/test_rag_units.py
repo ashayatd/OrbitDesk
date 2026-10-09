@@ -7,9 +7,7 @@ from app.retrieval.vectorstore.base import ScoredChunk
 
 
 def sc(cid: str, doc: str = "d", section: str = "s") -> ScoredChunk:
-    return ScoredChunk(
-        Chunk(cid, doc, "text", {"doc_id": doc, "section": section, "title": doc.title()}), 1.0
-    )
+    return ScoredChunk(Chunk(cid, doc, "text", {"doc_id": doc, "section": section, "title": doc.title()}), 1.0)
 
 
 def test_meta_splitter_handles_delimiter_split_across_tokens():

@@ -70,9 +70,7 @@ def openrouter_model(model: str, temperature: float = 0.0, max_tokens: int | Non
     )
 
 
-def candidate_models(
-    tier: Tier, temperature: float = 0.0, max_tokens: int | None = None
-) -> list[BaseChatModel]:
+def candidate_models(tier: Tier, temperature: float = 0.0, max_tokens: int | None = None) -> list[BaseChatModel]:
     s = get_settings()
     models: list[BaseChatModel] = []
     if s.groq_api_key:

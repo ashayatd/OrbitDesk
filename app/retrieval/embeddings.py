@@ -35,9 +35,7 @@ class LocalEmbedder:
 
     def embed_documents(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
         """L2-normalised, so cosine similarity == dot product (needed for FAISS IndexFlatIP)."""
-        vecs = self.model.encode(
-            texts, batch_size=batch_size, normalize_embeddings=True, convert_to_numpy=True
-        )
+        vecs = self.model.encode(texts, batch_size=batch_size, normalize_embeddings=True, convert_to_numpy=True)
         return vecs.astype(np.float32)
 
     def embed_query(self, text: str) -> np.ndarray:

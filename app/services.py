@@ -2,7 +2,9 @@
 
 from functools import lru_cache
 
+from app.agent.graph import AgentRunner
 from app.agent.memory import SessionMemory
+from app.agent.router import get_router
 from app.infra.redis_client import get_redis
 from app.rag.pipeline import RagPipeline
 from app.retrieval.embeddings import get_embedder
@@ -24,3 +26,8 @@ def get_memory() -> SessionMemory:
 @lru_cache
 def get_rag_pipeline() -> RagPipeline:
     return RagPipeline(get_retriever(), get_memory(), get_redis())
+
+
+@lru_cache
+def get_agent_runner() -> AgentRunner:
+    return AgentRunner(get_router(), get_rag_pipeline(), get_memory())

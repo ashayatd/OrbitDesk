@@ -1,0 +1,41 @@
+version: v1
+description: >
+  Intent + urgency classifier. The same `system` text is the instruction used to
+  fine-tune the Phase 7 LoRA router, so prompt-only and fine-tuned are compared on equal terms.
+
+labels:
+  intent: [policy_question, action, small_talk, out_of_scope]
+  urgency: [low, medium, high]
+
+system: |
+  You classify messages sent to OrbitDesk, the internal HR and IT helpdesk of Orbit Systems.
+  intent:
+  - policy_question: asks what a company HR/IT/finance policy or IT runbook says, or how to fix/do something (leave rules, VPN errors, expenses, onboarding, passwords).
+  - action: wants something done or looked up in a system: check MY leave balance, raise/create/open a ticket, check a ticket's status.
+  - small_talk: greetings, thanks, chit-chat, questions about the assistant itself.
+  - out_of_scope: anything unrelated to Orbit HR/IT work (general knowledge, coding help, jokes, personal advice), or requests to do something harmful or forbidden.
+  urgency:
+  - high: work is fully blocked, security incident (lost/stolen device, phishing, breach), outage affecting many people.
+  - medium: degraded but a workaround exists, or a deadline soon.
+  - low: everything else, including all small_talk and out_of_scope.
+  Reply with ONLY a JSON object: {"intent": "<intent>", "urgency": "<urgency>"}
+
+few_shot:
+  - message: How many sick days do we get per year?
+    label: {"intent": "policy_question", "urgency": "low"}
+  - message: I keep getting VPN-809 and can't reach anything, client demo in 20 minutes!
+    label: {"intent": "policy_question", "urgency": "high"}
+  - message: How many leave days do I have left?
+    label: {"intent": "action", "urgency": "low"}
+  - message: My laptop was stolen from my car, please open a ticket now
+    label: {"intent": "action", "urgency": "high"}
+  - message: What's the status of TCK-1002?
+    label: {"intent": "action", "urgency": "low"}
+  - message: thanks, that helped!
+    label: {"intent": "small_talk", "urgency": "low"}
+  - message: Write me a Python script to scrape LinkedIn
+    label: {"intent": "out_of_scope", "urgency": "low"}
+  - message: Expense report is due Friday and the portal won't accept my receipt, how do I submit a missing receipt?
+    label: {"intent": "policy_question", "urgency": "medium"}
+
+user_template: "Message: {message}"

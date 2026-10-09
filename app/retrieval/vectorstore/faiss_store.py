@@ -71,17 +71,13 @@ class FaissStore:
         return [c.chunk_id for c in self.chunks.values() if c.doc_id == doc_id]
 
     def query(self, embedding: np.ndarray, k: int, role: str) -> list[ScoredChunk]:
-        allowed = np.array(
-            [i for i, c in self.chunks.items() if c.metadata.get(f"role_{role}")], dtype=np.int64
-        )
+        allowed = np.array([i for i, c in self.chunks.items() if c.metadata.get(f"role_{role}")], dtype=np.int64)
         if allowed.size == 0:
             return []
         params = faiss.SearchParameters(sel=faiss.IDSelectorBatch(allowed))
         scores, ids = self.index.search(embedding.reshape(1, -1).astype(np.float32), k, params=params)
         return [
-            ScoredChunk(self.chunks[i], float(s), "vector")
-            for s, i in zip(scores[0], ids[0], strict=True)
-            if i != -1
+            ScoredChunk(self.chunks[i], float(s), "vector") for s, i in zip(scores[0], ids[0], strict=True) if i != -1
         ]
 
     def all_chunks(self, role: str | None = None) -> list[Chunk]:

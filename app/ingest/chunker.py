@@ -15,9 +15,7 @@ SEPARATORS = ["\n\n", "\n", ". ", " "]
 TokenCounter = Callable[[str], int]
 
 
-def split_recursive(
-    text: str, max_tokens: int, count: TokenCounter, seps: list[str] = SEPARATORS
-) -> list[str]:
+def split_recursive(text: str, max_tokens: int, count: TokenCounter, seps: list[str] = SEPARATORS) -> list[str]:
     """Split text into pieces that each fit max_tokens, using the coarsest separator that works."""
     if count(text) <= max_tokens:
         return [text]

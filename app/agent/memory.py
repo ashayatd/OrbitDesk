@@ -34,9 +34,7 @@ def approx_tokens(text: str) -> int:
 
 
 class SessionMemory:
-    def __init__(
-        self, r: redis.Redis, token_budget: int | None = None, recent_turns: int | None = None
-    ) -> None:
+    def __init__(self, r: redis.Redis, token_budget: int | None = None, recent_turns: int | None = None) -> None:
         s = get_settings()
         self.r = r
         self.token_budget = token_budget or s.memory_token_budget
@@ -55,10 +53,7 @@ class SessionMemory:
     def context(self, sid: str) -> tuple[str, list[dict]]:
         """(summary, recent messages) to give the LLM. Always within the token budget."""
         summary, turns = self.summary(sid), self.history(sid)
-        while (
-            turns
-            and approx_tokens(summary) + sum(approx_tokens(m["content"]) for m in turns) > self.token_budget
-        ):
+        while turns and approx_tokens(summary) + sum(approx_tokens(m["content"]) for m in turns) > self.token_budget:
             turns = turns[2:]  # defensive: trim if a compaction hasn't run yet
         return summary, turns
 
@@ -75,10 +70,7 @@ class SessionMemory:
     def _over_budget(self, sid: str) -> bool:
         turns = self.history(sid)
         too_many = len(turns) > 2 * self.recent_turns
-        too_big = (
-            approx_tokens(self.summary(sid)) + sum(approx_tokens(m["content"]) for m in turns)
-            > self.token_budget
-        )
+        too_big = approx_tokens(self.summary(sid)) + sum(approx_tokens(m["content"]) for m in turns) > self.token_budget
         return len(turns) > 2 and (too_many or too_big)
 
     def compact(self, sid: str) -> None:

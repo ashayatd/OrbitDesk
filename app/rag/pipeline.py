@@ -92,14 +92,11 @@ class RagPipeline:
             request_id=request_id,
             answer=answer,
             citations=[
-                CitationOut(doc_id=c.doc_id, section=c.section, title=c.title, chunk_id=c.chunk_id)
-                for c in valid
+                CitationOut(doc_id=c.doc_id, section=c.section, title=c.title, chunk_id=c.chunk_id) for c in valid
             ],
             invalid_citations=[f"[{c.doc_id}, {c.section}]" for c in citations if not c.valid],
             confidence=compute_confidence(retrieval.top_score, len(valid), len(citations), found),
-            follow_up_suggestions=[str(s) for s in meta.get("follow_up_suggestions", [])][:3]
-            if found
-            else [],
+            follow_up_suggestions=[str(s) for s in meta.get("follow_up_suggestions", [])][:3] if found else [],
             found=found,
             question=req.question,
             rewritten_question=rewritten,

@@ -27,10 +27,7 @@ class KeywordReranker:
 
     def rerank(self, query, candidates, top_k):
         q = set(tokenize(query))
-        scored = [
-            ScoredChunk(c.chunk, float(len(q & set(tokenize(c.chunk.text))) - 2), "rerank")
-            for c in candidates
-        ]
+        scored = [ScoredChunk(c.chunk, float(len(q & set(tokenize(c.chunk.text))) - 2), "rerank") for c in candidates]
         return sorted(scored, key=lambda s: s.score, reverse=True)[:top_k]
 
 
@@ -40,17 +37,13 @@ def corpus_store(tmp_path_factory):
     s = get_settings()
     db = tmp_path_factory.mktemp("db") / "t.db"
     for meta in load_manifest(s.docs_dir / "manifest.yaml"):
-        ingest_document(
-            s.docs_dir / meta.file, meta, store=store, embedder=FakeEmbedder(), r=get_redis(), db_path=db
-        )
+        ingest_document(s.docs_dir / meta.file, meta, store=store, embedder=FakeEmbedder(), r=get_redis(), db_path=db)
     return store
 
 
 @pytest.fixture
 def rag(corpus_store):
-    retriever = HybridRetriever(
-        corpus_store, FakeEmbedder(), KeywordReranker(), RetrievalConfig(rerank_threshold=0)
-    )
+    retriever = HybridRetriever(corpus_store, FakeEmbedder(), KeywordReranker(), RetrievalConfig(rerank_threshold=0))
     return RagPipeline(retriever, SessionMemory(get_redis()), get_redis(), "v1")
 
 
@@ -70,9 +63,7 @@ def test_answer_streams_and_verifies_citations(rag, monkeypatch):
         '{"follow_up_suggestions": ["How many sick days do I get?"]}'
     )
     monkeypatch.setattr(pipeline_mod, "get_llm", fake_llm(text))
-    events = list(
-        rag.run(AskRequest(question="How many unused annual leave days can I carry over?", session_id="s1"))
-    )
+    events = list(rag.run(AskRequest(question="How many unused annual leave days can I carry over?", session_id="s1")))
     names = [e[0] for e in events]
     assert names[0] == "meta" and names[-1] == "result" and names.count("token") > 3
     streamed = "".join(d for n, d in events if n == "token")
@@ -84,9 +75,7 @@ def test_answer_streams_and_verifies_citations(rag, monkeypatch):
     assert "salary-bands" not in res.answer
     assert res.follow_up_suggestions == ["How many sick days do I get?"]
     assert 0 < res.confidence < 1
-    assert {"embed_query", "vector_search", "bm25_search", "rerank", "llm_generate", "total"} <= set(
-        res.timings_ms
-    )
+    assert {"embed_query", "vector_search", "bm25_search", "rerank", "llm_generate", "total"} <= set(res.timings_ms)
     assert res.tokens.total_tokens > 0
 
 
@@ -94,9 +83,7 @@ def test_not_found_skips_llm(rag, monkeypatch):
     calls: list = []
     monkeypatch.setattr(pipeline_mod, "get_llm", fake_llm("should not be used", calls))
     res = list(
-        rag.run(
-            AskRequest(question="Who won the football world cup final yesterday evening?", session_id="s2")
-        )
+        rag.run(AskRequest(question="Who won the football world cup final yesterday evening?", session_id="s2"))
     )[-1][1]
     assert res.answer == NOT_FOUND and not res.found and res.confidence == 0
     assert calls == []  # no generation call: zero tokens spent on unanswerable questions
@@ -110,9 +97,7 @@ def test_employee_context_never_contains_hr_chunks(rag, monkeypatch):
             seen_prompts.append(messages[-1].content)
             yield from super()._stream(messages, *a, **k)
 
-    monkeypatch.setattr(
-        pipeline_mod, "get_llm", lambda *a, **k: Spy(messages=iter([AIMessage(content="ok")]))
-    )
+    monkeypatch.setattr(pipeline_mod, "get_llm", lambda *a, **k: Spy(messages=iter([AIMessage(content="ok")])))
     for i, q in enumerate(
         [
             "What is the salary band midpoint for a senior engineer E3?",

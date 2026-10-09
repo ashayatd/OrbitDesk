@@ -47,11 +47,7 @@ def verify_citations(answer: str, chunks: list[ScoredChunk]) -> list[Citation]:
             continue
         seen.add(key)
         match = next(
-            (
-                sc.chunk
-                for sc in chunks
-                if sc.chunk.doc_id == doc_id and _section_matches(section, sc.chunk.section)
-            ),
+            (sc.chunk for sc in chunks if sc.chunk.doc_id == doc_id and _section_matches(section, sc.chunk.section)),
             None,
         )
         out.append(
@@ -70,7 +66,5 @@ def strip_invalid_citations(answer: str, citations: list[Citation]) -> str:
     """Remove citation markers that failed verification, so the user never sees a fake source."""
     for c in citations:
         if not c.valid:
-            answer = re.sub(
-                r"\s*\[" + re.escape(c.doc_id) + r"\s*,\s*" + re.escape(c.section) + r"\]", "", answer
-            )
+            answer = re.sub(r"\s*\[" + re.escape(c.doc_id) + r"\s*,\s*" + re.escape(c.section) + r"\]", "", answer)
     return answer
