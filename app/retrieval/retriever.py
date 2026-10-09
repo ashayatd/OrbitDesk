@@ -53,13 +53,18 @@ class HybridRetriever:
         self.config = config or RetrievalConfig.from_settings()
         self.bm25 = BM25Registry(store)
 
-    def retrieve(self, query: str, role: str, index_version: int = 0) -> RetrievalResult:
+    def embed(self, query: str):
+        return self.embedder.embed_query(query)
+
+    def retrieve(self, query: str, role: str, index_version: int = 0, qvec=None) -> RetrievalResult:
+        """qvec: pass the query embedding if the caller already computed it (semantic cache lookup)."""
         cfg = self.config
         t: dict[str, float] = {}
 
-        t0 = time.perf_counter()
-        qvec = self.embedder.embed_query(query)
-        t["embed_query"] = _ms(t0)
+        if qvec is None:
+            t0 = time.perf_counter()
+            qvec = self.embedder.embed_query(query)
+            t["embed_query"] = _ms(t0)
 
         t0 = time.perf_counter()
         vector_hits = self.store.query(qvec, cfg.candidate_k, role)

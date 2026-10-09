@@ -9,7 +9,7 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool
 
 from app.cache.index_version import get_index_version
-from app.deps import require_llm
+from app.deps import rate_limit, require_llm
 from app.errors import LLMUnavailableError
 from app.infra.redis_client import get_redis
 from app.log import get_logger
@@ -41,6 +41,11 @@ def sse_events(events: Iterator[tuple[str, object]]) -> Iterator[dict]:
         }
 
 
+def _prepend(first, rest: Iterator) -> Iterator:
+    yield first
+    yield from rest
+
+
 def collect(events: Iterator[tuple[str, object]]) -> AskResponse:
     result = None
     for name, data in events:
@@ -52,7 +57,10 @@ def collect(events: Iterator[tuple[str, object]]) -> AskResponse:
 
 @router.post("/ask", response_model=AskResponse)
 async def ask(req: AskRequest, _=Depends(require_llm)):
+    rate_limit(req.session_id)
     events = get_rag_pipeline().run(req)
+    first = await run_in_threadpool(next, events)  # run input guardrails now: a 400 must not be a 200 stream
+    events = _prepend(first, events)
     if req.stream:
         return EventSourceResponse(iterate_in_threadpool(sse_events(events)))
     return await run_in_threadpool(collect, events)

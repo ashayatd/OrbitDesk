@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from app.agent.actions import ConfirmError, confirm_action
-from app.deps import require_llm
+from app.deps import rate_limit, require_llm
 from app.infra.redis_client import get_redis
 from app.schemas.agent import AgentRequest, AgentResponse, ConfirmRequest
 from app.services import get_agent_runner
@@ -14,6 +14,7 @@ router = APIRouter(tags=["agent"])
 
 @router.post("/agent", response_model=AgentResponse)
 async def agent(req: AgentRequest, _=Depends(require_llm)) -> AgentResponse:
+    rate_limit(req.session_id)
     try:
         out = await run_in_threadpool(get_agent_runner().run, req.message, req.session_id, req.role, req.employee_id)
     except PermissionError as e:

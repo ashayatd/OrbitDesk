@@ -1,0 +1,79 @@
+{
+  "model": "BAAI/bge-small-en-v1.5",
+  "configured_threshold": 0.95,
+  "max_near_miss_cosine": 0.927,
+  "min_paraphrase_cosine": 0.7804,
+  "false_hits_at_threshold": 0,
+  "paraphrase_hits_at_threshold": 3,
+  "n_paraphrases": 6,
+  "n_near_misses": 7,
+  "paraphrases": [
+    {
+      "a": "How many days of annual leave do I get?",
+      "b": "How many annual leave days do I get?",
+      "cosine": 0.9883
+    },
+    {
+      "a": "How do I fix VPN error 809?",
+      "b": "How can I fix the VPN-809 error?",
+      "cosine": 0.9893
+    },
+    {
+      "a": "What is the hotel limit in London?",
+      "b": "What's the nightly hotel limit for London?",
+      "cosine": 0.9325
+    },
+    {
+      "a": "how do i reset my password",
+      "b": "How do I reset my password?",
+      "cosine": 0.9808
+    },
+    {
+      "a": "What is the internet allowance for working from home?",
+      "b": "How much internet allowance do WFH employees get?",
+      "cosine": 0.7804
+    },
+    {
+      "a": "Who do I call for a P1 incident?",
+      "b": "Which number do I call for a P1 incident?",
+      "cosine": 0.9452
+    }
+  ],
+  "near_misses": [
+    {
+      "a": "How many days of annual leave do I get?",
+      "b": "How many sick days do I get?",
+      "cosine": 0.7374
+    },
+    {
+      "a": "How do I fix VPN error 809?",
+      "b": "How do I fix VPN error 691?",
+      "cosine": 0.8334
+    },
+    {
+      "a": "What is the hotel limit in London?",
+      "b": "What is the hotel limit in Berlin?",
+      "cosine": 0.8244
+    },
+    {
+      "a": "How many days of annual leave do I get?",
+      "b": "How many days of annual leave can I carry over?",
+      "cosine": 0.8839
+    },
+    {
+      "a": "What is the meal allowance for domestic travel?",
+      "b": "What is the meal allowance for international travel?",
+      "cosine": 0.927
+    },
+    {
+      "a": "How long is primary caregiver parental leave?",
+      "b": "How long is secondary caregiver parental leave?",
+      "cosine": 0.9224
+    },
+    {
+      "a": "What is the response target for a P1 incident?",
+      "b": "What is the response target for a P2 incident?",
+      "cosine": 0.911
+    }
+  ]
+}

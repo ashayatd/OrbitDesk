@@ -23,8 +23,13 @@ from langgraph.prebuilt import ToolNode
 from app.agent.memory import SessionMemory
 from app.agent.router import Router
 from app.agent.tools import AgentContext, build_tools, usage_from_response
+from app.cache.index_version import get_index_version
 from app.config import get_settings
 from app.db.repo import get_employee
+from app.errors import InputRejectedError
+from app.guardrails.injection import check_input
+from app.guardrails.output import BLOCKED_REPLY, check_output
+from app.guardrails.pii import mask_pii
 from app.llm.client import get_llm
 from app.log import get_logger
 from app.rag.pipeline import RagPipeline
@@ -41,6 +46,7 @@ OUT_OF_SCOPE_REPLY = "Sorry, I can only help with Orbit Systems HR policies, IT 
 STEP_LIMIT_REPLY = "I couldn't finish this within the allowed number of steps. Please rephrase or split the request."
 TIMEOUT_REPLY = "This is taking too long, so I stopped. Please try again in a moment."
 ERROR_REPLY = "Sorry, something went wrong on my side. Please try again."
+REFUSAL_REPLY = "I can't help with that request. I can answer questions about Orbit HR policies and IT support."
 
 
 class AgentState(TypedDict, total=False):
@@ -145,6 +151,18 @@ class AgentRunner:
         if employee["role"] != role:
             raise PermissionError("role does not match the employee record")
         ctx = AgentContext(employee_id=employee_id, role=role, session_id=session_id)
+
+        # Input guardrails (same as /ask): length cap, PII masking, injection/unsafe check.
+        if len(message) > self.settings.max_question_chars:
+            raise InputRejectedError(f"message longer than {self.settings.max_question_chars} characters")
+        masked = mask_pii(message)
+        message = masked.text
+        verdict = check_input(message, ctx.usage)
+        guard: dict = {"input_check": verdict.to_dict(), **({"pii_masked": masked.counts} if masked.masked else {})}
+        if verdict.blocked:
+            self.memory.append(session_id, message, REFUSAL_REPLY)
+            return self._response(REFUSAL_REPLY, {}, ctx, {}, t0, guard)
+
         timeout = self.settings.agent_timeout_s
         state: AgentState = {
             "message": message,
@@ -172,10 +190,20 @@ class AgentRunner:
             pool.shutdown(wait=False)
 
         reply = final.get("reply", ERROR_REPLY)
+        # Output guardrail: never return restricted-document content to this role.
+        restricted = self.rag.restricted.for_role(role, get_index_version(self.rag.r)) if self.rag else set()
+        blocked = check_output(reply, restricted)
+        if blocked:
+            guard["output_blocked"] = blocked
+            reply = BLOCKED_REPLY
         self.memory.append(session_id, message, reply)
+        return self._response(reply, final.get("route", {}), ctx, final, t0, guard)
+
+    @staticmethod
+    def _response(reply: str, route: dict, ctx: AgentContext, final: dict, t0: float, guard: dict) -> dict:
         return {
             "reply": reply,
-            "route": final.get("route", {}),
+            "route": route,
             "pending_action": ctx.pending[-1].to_dict() if ctx.pending else None,
             "citations": ctx.citations,
             "tool_calls": ctx.tool_log,
@@ -183,4 +211,5 @@ class AgentRunner:
             "stopped": final.get("stopped") or None,
             "timings_ms": {"total": round((time.perf_counter() - t0) * 1000, 1)},
             "tokens": ctx.usage.to_dict(),
+            "guardrails": guard,
         }

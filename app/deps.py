@@ -2,6 +2,8 @@
 
 from app.config import Settings, get_settings
 from app.errors import LLMUnavailableError
+from app.infra.ratelimit import check_rate_limit
+from app.infra.redis_client import get_redis
 
 
 def require_llm() -> Settings:
@@ -10,3 +12,8 @@ def require_llm() -> Settings:
     if not settings.llm_available:
         raise LLMUnavailableError()
     return settings
+
+
+def rate_limit(session_id: str) -> None:
+    """Per-session limit for LLM endpoints (raises 429 with Retry-After)."""
+    check_rate_limit(get_redis(), session_id, get_settings().rate_limit_per_minute)

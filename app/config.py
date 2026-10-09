@@ -79,7 +79,8 @@ class Settings(BaseSettings):
     agent_timeout_s: float = 60.0
     memory_token_budget: int = 1500
     memory_recent_turns: int = 6
-    semantic_cache_threshold: float = 0.95
+    semantic_cache_threshold: float = 0.95  # see reports/semantic_cache_calibration.json
+    injection_llm_check: bool = True  # 2nd-layer LLM safety classifier on user input
 
     @property
     def llm_available(self) -> bool:
