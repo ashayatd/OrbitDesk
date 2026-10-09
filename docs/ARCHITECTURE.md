@@ -1,26 +1,33 @@
 # Architecture
 
-OrbitDesk is one FastAPI service (the Gradio UI is mounted inside it at `/ui`), one RQ worker, Redis, a
-vector store (Chroma; FAISS behind the same interface), and SQLite as the mock enterprise systems.
-Embeddings and reranking run locally on CPU; generation, speech-to-text and vision call Groq.
+OrbitDesk is one FastAPI service (the Gradio UI is mounted at `/ui`, the MCP server at `/mcp/`), one RQ
+worker, Redis, and Postgres with pgvector, which holds the mock enterprise systems (employees, leave, tickets,
+pending actions), the request log, and the document vectors + full-text index. Without `DATABASE_URL` the same
+code runs on SQLite + Chroma (FAISS is a third store for comparison). Embeddings and reranking run locally on
+CPU; generation, speech-to-text and vision call Groq.
 
 ```mermaid
 flowchart LR
     U[Employee<br/>text / voice / screenshot] --> API[FastAPI + Gradio /ui]
+    MC[MCP client] -->|stdio, or HTTP + bearer token| MCP[MCP server /mcp/]
+    MCP --> CT[core tools<br/>identity from token/config]
     API -->|enqueue ingest job| Q[(Redis<br/>queue · cache · locks · memory · rate limits)]
     Q --> W[RQ worker<br/>parse · chunk · embed · upsert]
-    W --> V[(Chroma<br/>role + department metadata)]
-    API -->|hybrid search, role pre-filter| V
-    API --> BM[BM25 per role<br/>in memory]
+    W --> PG[(Postgres + pgvector<br/>employees · leave · tickets · pending actions<br/>vectors HNSW · tsvector GIN · request log)]
+    API -->|role filter in WHERE; vector + full-text + RRF in one SQL query| PG
     API --> CE[Cross-encoder<br/>rerank, CPU]
+    API --> AG[LangGraph agent]
+    AG -->|tools in-process, or via MCP| CT
+    CT -->|text-to-SQL: 2 views, READ ONLY, read-only role| PG
     API --> LLM[Groq: gpt-oss-120b / 20b<br/>Whisper · vision · Prompt Guard]
     LLM -. fallback .-> OR[OpenRouter<br/>optional]
-    API --> DB[(SQLite<br/>employees · leave · tickets<br/>request log · feedback)]
     API -. traces .-> LF[Langfuse<br/>optional]
 ```
 
 Source of each box: `app/api/*` (HTTP), `app/ui/*` (Gradio), `worker.py` + `app/ingest/*` (worker),
-`app/retrieval/*` (search), `app/llm/client.py` (LLM + fallback), `app/db/*` (SQLite),
+`app/retrieval/*` (search; `vectorstore/pgvector_store.py`, `llamaindex_retriever.py`), `app/llm/client.py`
+(LLM + fallback), `app/db/*` (SQLAlchemy Core, Postgres or SQLite), `app/analytics/*` (text-to-SQL),
+`app/mcp_server/*` (MCP),
 `app/observability/*` (logs, stats, tracing).
 
 ## Ingestion (`POST /ingest`, worker, startup)
@@ -97,13 +104,52 @@ flowchart LR
 - Tools are built per request as closures over the trusted identity: `get_leave_balance` takes **no
   arguments**, so the model cannot ask for someone else's balance. `get_ticket_status` hides other users'
   tickets (same "not found" message, so existence isn't leaked).
-- `create_ticket` only stores a pending action in Redis (TTL 10 min) and returns a `confirmation_id`.
-  `POST /agent/confirm` executes it once: `SET idem:{key} NX` in Redis, then a `UNIQUE` idempotency key
-  in SQLite. A double click returns the same ticket with `status: duplicate`.
+- `create_ticket` only inserts a row into `pending_actions` (expires after 10 min) and returns a
+  `confirmation_id`. `POST /agent/confirm` runs one transaction: `SELECT ... FOR UPDATE` on that row,
+  `INSERT INTO tickets ... ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`, then marks the action
+  `executed`. A double click waits for the lock and gets the same ticket back with `status: duplicate`.
+- IT admins also get `ticket_analytics` (text-to-SQL, below).
+- `TOOLS_VIA_MCP=true`: `search_policies`, `get_ticket_status` and `ticket_analytics` are loaded from the MCP
+  server with a 5-minute token minted for the current user; `get_leave_balance` and `create_ticket` stay local.
 - Limits: `AGENT_MAX_STEPS`, an in-graph deadline checked before each LLM call, a hard wall-clock cap on
   the whole graph, and LangGraph's recursion limit. Every failure becomes a polite reply, never a 500.
 
 Files: `app/agent/graph.py`, `router.py`, `tools.py`, `actions.py`, `memory.py`, `app/api/agent.py`.
+
+## Text-to-SQL (`ticket_analytics`, IT admins only)
+
+```mermaid
+sequenceDiagram
+    participant A as Agent / MCP client
+    participant T as ticket_analytics
+    participant L as LLM
+    participant V as Validator (sqlglot)
+    participant P as Postgres
+    A->>T: question (+ identity from session/token)
+    T->>T: role == it_admin? else refuse
+    T->>L: schema of v_tickets + v_departments only, question
+    L-->>T: one SELECT
+    T->>V: parse: 1 statement, SELECT only, allowlisted views, no WITH/INTO/comments/;, safe functions
+    V-->>T: SQL with LIMIT added or capped (or rejection reason)
+    T->>P: BEGIN READ ONLY; SET LOCAL ROLE orbitdesk_analytics; SET LOCAL statement_timeout
+    P-->>T: rows (role can only SELECT the two views)
+    T-->>A: {sql, columns, rows}
+```
+
+On SQLite the database layer is `PRAGMA query_only` plus a progress-handler timeout (no roles).
+Files: `app/analytics/text_to_sql.py`, `app/agent/core_tools.py`, `prompts/text_to_sql_v1.yaml`.
+
+## MCP server (`/mcp/` and `python -m app.mcp_server`)
+
+- Tools: `search_policies`, `get_ticket_status`, `ticket_analytics`, implemented by the same functions as the
+  in-process agent tools (`app/agent/core_tools.py`).
+- **stdio** (local clients such as Claude Desktop): identity from `MCP_EMPLOYEE_ID` + `MCP_ROLE`, checked
+  against the employee record at startup; the server refuses to start if they don't match.
+- **Streamable HTTP** (remote): mounted in the API at `/mcp/`, stateless. Every request needs
+  `Authorization: Bearer <token>`; the SDK's auth middleware calls our `TokenVerifier`, which checks the HMAC
+  signature and expiry. Tools read the caller from the verified token, never from their arguments.
+
+Files: `app/mcp_server/server.py`, `auth.py`, `__main__.py`, `app/agent/mcp_tools.py`.
 
 ## `/voice`
 
@@ -130,4 +176,6 @@ Files: `app/api/multimodal.py`, `app/multimodal/vision.py`.
 | Abuse | per-session rate limit, input length cap | `app/infra/ratelimit.py`, `app/rag/pipeline.py` |
 | Duplicate work | per-document Redis lock + content hash; idempotent confirm | `app/infra/locks.py`, `app/agent/actions.py` |
 | Stale answers | cache keys include the index version, bumped by every changed ingest | `app/cache/*` |
+| LLM-written SQL | parsed-tree validator + READ ONLY transaction + read-only role + statement timeout | `app/analytics/text_to_sql.py` |
+| Tool identity | closures over the session (in-process) or verified bearer token / server config (MCP) | `app/agent/tools.py`, `app/mcp_server/*` |
 | No API key | every LLM endpoint returns 503 with a clear message; ingestion + `/search` work | `app/deps.py` |

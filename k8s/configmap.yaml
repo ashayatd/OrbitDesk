@@ -1,4 +1,4 @@
-# Non-secret settings. Secrets (GROQ_API_KEY, LANGFUSE_*) go in a Secret named orbitdesk-secrets:
+# Non-secret settings. Secrets (GROQ_API_KEY, DATABASE_URL, MCP_AUTH_SECRET, LANGFUSE_*) go in a Secret named orbitdesk-secrets:
 #   kubectl create secret generic orbitdesk-secrets --from-env-file=.env
 apiVersion: v1
 kind: ConfigMap
@@ -6,7 +6,7 @@ metadata:
   name: orbitdesk-config
 data:
   REDIS_URL: redis://redis:6379/0
-  CHROMA_URL: http://chroma:8000
+  VECTOR_BACKEND: auto     # pgvector when DATABASE_URL (from the secret) is set
   QUEUE_MODE: rq
   PROMPT_VERSION: v1       # rollback lever: change + `kubectl rollout restart deploy/orbitdesk-api`
   ROUTER_MODE: prompt

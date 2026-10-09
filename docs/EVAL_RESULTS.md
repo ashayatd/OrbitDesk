@@ -17,9 +17,9 @@ Config: `{"chunk_size": 300, "top_k": 5, "rerank": true, "hybrid": true, "store"
 | False refusal rate on answerable questions | 0.061 |
 | Access-control leaks on the golden set | 0 |
 | **Adversarial leak test** (restricted chunk text, headings, first sentences as queries; vector, hybrid, hybrid+rerank; every role) | **0 leaks in 198 queries** |
-| Retrieval latency p50 / p95 | 151.1 ms / 190.5 ms |
+| Retrieval latency p50 / p95 | 166.8 ms / 212.5 ms |
 
-Median stage latency: embed_query 10.61 ms, vector_search 3.11 ms, bm25_search 0.24 ms, fusion 0.03 ms, rerank 137.38 ms.
+Median stage latency: embed_query 11.43 ms, vector_search 3.23 ms, bm25_search 0.23 ms, fusion 0.03 ms, rerank 153.05 ms.
 
 Misses (wrongly refused, or expected source not retrieved):
 
@@ -120,7 +120,7 @@ Factors: chunk size {100, 300} x top-k {3, 5} x rerank on/off x hybrid (vector+B
 
 - **Winner: `cs100-k5-rr-vec-chroma-v1`** (recall@5 1.000, MRR 0.965, no-answer accuracy 0.950, p50 132 ms) vs baseline `cs300-k5-norr-vec-chroma-v1` (recall@5 1.000, MRR 0.925, no-answer accuracy 0.850, p50 14 ms).
 - **Reranking is the factor that matters.** Averaged over the grid it raises MRR from 0.925 to 0.961 and no-answer accuracy from 0.850 to 0.950: the cross-encoder logit is a much better "is this actually relevant?" signal than cosine similarity, so the refusal threshold works. The price is latency (20 ms to 170 ms p50), almost all of it the cross-encoder on CPU.
-- **Hybrid (BM25 + RRF) made no measurable difference here** (MRR 0.946 vector-only vs 0.941 hybrid). The corpus is small and clean, and bge-small already handles exact codes like VPN-809. Production keeps hybrid on because BM25 costs ~0.24 ms and is cheap insurance for identifier-heavy queries this golden set does not stress, but this is a judgment call, not something the numbers prove.
+- **Hybrid (BM25 + RRF) made no measurable difference here** (MRR 0.946 vector-only vs 0.941 hybrid). The corpus is small and clean, and bge-small already handles exact codes like VPN-809. Production keeps hybrid on because BM25 costs ~0.23 ms and is cheap insurance for identifier-heavy queries this golden set does not stress, but this is a judgment call, not something the numbers prove.
 - **Chunk size 100 vs 300:** MRR 0.948 vs 0.938, p50 84 vs 106 ms. The latency gain is consistent with the cross-encoder scoring shorter (query, chunk) pairs. The quality difference is within one question. Most sections in these documents are shorter than 150 tokens, which is why the grid uses 100 vs 300 rather than 300 vs 500 (at 300 and 500 the chunks would be identical).
 - **top-k 3 vs 5:** recall 0.949 vs 0.996. In the production config at k=3 the misses were the second source of two multi-document questions (q23, q26) and one single-source question (q20) whose answer chunk ranked 4th.
 - **Stores and frameworks** (same chunks, same embedding model, same role filter; hybrid means Python BM25 + RRF for Chroma/FAISS, Postgres full-text + RRF in one SQL query for pgvector, and BM25Retriever + QueryFusionRetriever for LlamaIndex):

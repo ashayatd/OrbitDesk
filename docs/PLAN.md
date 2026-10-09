@@ -211,7 +211,7 @@ Roles are stored as boolean flags because Chroma's `where` filter works on scala
 - **Chunk-size grid values:** 100 vs 300 tokens (not 300 vs 500): most sections are under 150 tokens, so
   300 and 500 produce identical chunks.
 
-## 10. Phase 8b: Postgres, text-to-SQL, MCP, LlamaIndex (added 2026-10-09, second target JD)
+## 10. Phase 8b: Postgres, text-to-SQL, MCP, LlamaIndex (added 2026-10-09, second target JD) - DONE
 
 Ordering: Phases 9 and 10 were already committed when 8b was requested. 8b is built now in its own
 commits, and the Phase 9 artifacts (compose, Dockerfile, CI) and Phase 10 docs are updated in the same
@@ -225,3 +225,7 @@ phase, so the shipped version includes 8b.
 | C. MCP server | Official Python MCP SDK; tools `search_policies`, `get_ticket_status`, `ticket_analytics`; identity from server config (stdio) or a signed bearer token (streamable HTTP), never from tool args; README client config; `TOOLS_VIA_MCP=true` makes the LangGraph agent load those tools through an MCP client adapter | agent tests pass in both modes |
 | D. LlamaIndex path | Same chunks, same local embedding model, same role filter, behind the retriever interface; in the eval grid with recall@5, MRR, latency | grid rows |
 | E. Docs | DECISIONS: LangChain vs LlamaIndex vs LangGraph, Postgres choices; INTERVIEW_MAP: second-JD section (Oracle marked "not used") | numbers checked by `scripts/check_doc_numbers.py` |
+
+Phase 8b outcome: all five parts built. Measured without an LLM key: Postgres integration tests, 64-config grid
+(Chroma, FAISS, pgvector, LlamaIndex), leak tests on every backend, SQL attack suites on SQLite and Postgres,
+compose run on Postgres. Needs the key: text-to-SQL accuracy and natural-language attacks (`evals/sql_eval.py`).

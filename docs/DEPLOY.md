@@ -5,15 +5,18 @@
 | Target | How | Status |
 |---|---|---|
 | Hugging Face Space (Docker SDK, port 7860) | GitHub Actions `deploy` job uploads the repo; the Space builds the root `Dockerfile` (API + UI + RQ worker + Redis + Chroma server under supervisord) | Image **built and smoke-tested locally** (3.57GB after Phase 8b, CPU torch); deploy workflow **needs your Space + secrets** (below) |
-| Local multi-service | `docker compose up --build` (api, worker, redis, chroma) | **Run locally**: all 4 services healthy, startup ingestion indexed 12/12 docs (`reports/docker_smoke.json`) |
+| Local multi-service | `docker compose up --build` (api, worker, redis, postgres + pgvector) | **Run locally on Postgres**: all 4 services healthy, 12/12 docs indexed into pgvector, MCP over HTTP, 5 concurrent confirms -> 1 ticket (`reports/postgres_compose_smoke.json`) |
 | Kubernetes | `k8s/` manifests | Written; **not tested on kind** |
 
 ## Pipeline (`.github/workflows/ci.yml`)
 
 1. **lint**: `ruff check` + `ruff format --check`
-2. **test**: `pytest` with every API key empty (the app must work without keys)
+2. **test**: `pytest` with every API key empty (the app must work without keys), including Postgres
+   integration tests against a pgvector service container, then the whole suite again with
+   `TOOLS_VIA_MCP=true` (agent tools through the MCP server)
 3. **eval-gate**: `evals/retrieval_eval.py --gate` fails the build if recall@5 or MRR drop below
-   `evals/gate.json`, or if the adversarial access-control test finds a single leak. No API key needed.
+   `evals/gate.json`, or if the adversarial access-control test finds a single leak on Chroma, LlamaIndex or
+   pgvector. No API key needed.
 4. **docker**: builds the image and smoke-tests the container: `/health` up, `/ask` returns 503 without a
    key, `/search` returns the VPN runbook.
 5. **deploy**: on push to `main`, on `v*` tags, or manually: uploads the checked-out ref to the Space.
@@ -23,6 +26,11 @@
 1. Create a Space: huggingface.co > New Space > SDK **Docker** > blank. Note its id (`your-name/orbitdesk`).
 2. Space > Settings > **Secrets**: `GROQ_API_KEY` (and optionally `FALLBACK_PROVIDER_KEY`,
    `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`).
+   Optional secret `DATABASE_URL`: a hosted Postgres with pgvector (e.g. Neon free tier,
+   `postgresql+psycopg://user:password@host/db?sslmode=require`). Without it the Space runs on SQLite + Chroma
+   and logs `database_fallback_sqlite`; with it, tables, indexes, the analytics views and the read-only role are
+   created at startup and the docs are indexed into pgvector.
+   Set `MCP_AUTH_SECRET` to a long random value: it signs the MCP bearer tokens.
    Space > Settings > **Variables**: `PROMPT_VERSION=v1`, `ROUTER_MODE=prompt`.
 3. GitHub repo > Settings > Secrets and variables > Actions:
    secret `HF_TOKEN` (a Hugging Face token with **write** access), variable `HF_SPACE_ID=your-name/orbitdesk`.

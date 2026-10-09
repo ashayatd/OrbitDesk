@@ -1,7 +1,6 @@
 # API deployment (stateless except SQLite, see note) + worker deployment.
-# NOTE: SQLite is fine for the demo but not for >1 API replica across nodes; in a real cluster
-# the mock enterprise DB + request log would move to Postgres. Redis and Chroma run as their own
-# services (e.g. Bitnami Redis chart, chromadb/chroma image) and are not defined here.
+# Postgres (with pgvector) and Redis run as their own services and are not defined here; DATABASE_URL comes
+# from the orbitdesk-secrets Secret. API replicas are stateless (sessions in Redis, MCP is stateless HTTP).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

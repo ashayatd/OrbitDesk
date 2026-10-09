@@ -16,4 +16,6 @@ runbooks with verified citations, role-based access control, and an agent that c
 and raise IT tickets. All data is fictional.
 
 Generation needs the `GROQ_API_KEY` Space secret; without it, the UI explains that generation is off and
-retrieval still works. Source, evals and architecture docs: see the GitHub repository.
+retrieval still works. Optional `DATABASE_URL` (hosted Postgres with pgvector, e.g. Neon) switches the data,
+vectors and full-text search to Postgres; otherwise the Space uses SQLite + Chroma. The MCP server is at
+`/mcp/` (bearer token required). Source, evals and architecture docs: see the GitHub repository.

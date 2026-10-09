@@ -33,6 +33,8 @@ CONFIG_CONSTANTS = {
     "1.14.2": "trl version",
     "1.15": "trl version",
     "0.4.3": "ragas version",
+    "1.30": "mcp SDK version",
+    "0.8": "pgvector version (iterative scan)",
     "0.4": "langchain-community version",
     "3.0": "version",
     "2.0": "doc version",
