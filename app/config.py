@@ -22,11 +22,16 @@ class Settings(BaseSettings):
     )
 
     # --- Groq ---
+    # Defaults are FREE-plan models (checked 2026-10-09): the Llama 3.x models are now
+    # "Enterprise / contact sales" on Groq. gpt-oss are reasoning models with tool calling.
     groq_api_key: str = ""
-    groq_chat_model: str = "llama-3.3-70b-versatile"
-    groq_small_model: str = "llama-3.1-8b-instant"  # router, rewrite, injection classifier, 1st fallback
-    groq_vision_model: str = "qwen/qwen3.8-27b"
+    groq_chat_model: str = "openai/gpt-oss-120b"
+    groq_small_model: str = "openai/gpt-oss-20b"  # router, rewrite, memory summary, 1st fallback
+    groq_vision_model: str = "qwen/qwen3.8-27b"  # preview model: /image degrades gracefully if it goes away
     groq_stt_model: str = "whisper-large-v3-turbo"
+    groq_safety_model: str = "meta-llama/llama-prompt-guard-2-86m"  # injection/jailbreak classifier
+    reasoning_effort: str = "low"  # gpt-oss: low keeps latency + hidden reasoning tokens down
+    judge_model: str = "openai/gpt-oss-20b"  # RAGAS judge (separate daily quota from the generator)
 
     # --- Optional second provider (OpenRouter, OpenAI-compatible API) ---
     fallback_provider_key: str = ""
@@ -78,12 +83,13 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 20
     llm_timeout_s: float = 30.0
     llm_max_retries: int = 2
+    llm_fallbacks_enabled: bool = True  # evals turn this off so a quota hit can't silently swap models
     agent_max_steps: int = 6
     agent_timeout_s: float = 60.0
     memory_token_budget: int = 1500
     memory_recent_turns: int = 6
     semantic_cache_threshold: float = 0.95  # see reports/semantic_cache_calibration.json
-    injection_llm_check: bool = True  # 2nd-layer LLM safety classifier on user input
+    safety_classifier: str = "promptguard"  # promptguard | llm | off (2nd layer after regex heuristics)
 
     @property
     def llm_available(self) -> bool:

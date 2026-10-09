@@ -1,0 +1,6 @@
+{
+  "_comment": "CI fails if the production retrieval config drops below these. Current values: reports/retrieval_eval.json",
+  "min_recall_at_5": 0.95,
+  "min_mrr": 0.9,
+  "max_leaks": 0
+}

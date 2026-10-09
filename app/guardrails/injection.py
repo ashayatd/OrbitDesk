@@ -2,7 +2,11 @@
 
 Layer 1 - heuristics (regex, ~0 ms, no tokens): applied to user input AND to every
           retrieved chunk (a poisoned document is "indirect" prompt injection).
-Layer 2 - LLM classifier (Groq small model, prompts/safety_v1.yaml): user input only.
+Layer 2 - classifier on user input only, chosen by SAFETY_CLASSIFIER:
+          promptguard (default): Llama Prompt Guard 2 86M on Groq, a purpose-built
+            injection/jailbreak classifier (free plan, 512-token input, ~$0.04/M tokens);
+          llm: the small chat model with prompts/safety_v1.yaml (also flags "unsafe" asks);
+          off: heuristics only.
           Verdicts are cached by message hash, so a repeated message costs nothing.
 
 A strong heuristic hit blocks without calling the LLM. Retrieved chunks that trip
@@ -18,7 +22,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import get_settings
 from app.infra.redis_client import get_redis
-from app.llm.client import get_llm
+from app.llm.client import get_llm, groq_model
 from app.llm.usage import Usage
 from app.log import get_logger
 from app.rag.prompts import load_prompt
@@ -97,7 +101,7 @@ def is_suspicious_chunk(text: str) -> bool:
 def _llm_classify(message: str, usage: Usage | None) -> SafetyVerdict:
     p = load_prompt("safety", "v1")
     msgs = [SystemMessage(p["system"]), HumanMessage(p["user_template"].format(message=message))]
-    resp = get_llm("small", max_tokens=40).invoke(msgs)
+    resp = get_llm("small", max_tokens=60).invoke(msgs)
     if usage is not None:
         usage.add_message("safety", resp, prompt_chars=sum(len(m.content) for m in msgs))
     text = str(resp.content)
@@ -110,23 +114,45 @@ def _llm_classify(message: str, usage: Usage | None) -> SafetyVerdict:
     return SafetyVerdict(label, 1.0 if label != "safe" else 0.0, "llm", str(data.get("reason", ""))[:100])
 
 
+def parse_prompt_guard(text: str) -> float:
+    """Prompt Guard's output format isn't documented on Groq: accept a probability ("0.998",
+    "1.2e-05") or a label ("MALICIOUS"/"JAILBREAK"/"INJECTION" vs "BENIGN")."""
+    try:
+        return float(text.strip())
+    except ValueError:
+        t = text.upper()
+        return 1.0 if any(w in t for w in ("MALICIOUS", "JAILBREAK", "INJECTION", "UNSAFE")) else 0.0
+
+
+def _prompt_guard_classify(message: str, usage: Usage | None) -> SafetyVerdict:
+    s = get_settings()
+    resp = groq_model(s.groq_safety_model, max_tokens=20).invoke([HumanMessage(message[:2000])])
+    if usage is not None:
+        usage.add_message("safety", resp, prompt_chars=len(message))
+    prob = parse_prompt_guard(str(resp.content))
+    label = "injection" if prob >= 0.5 else "safe"
+    return SafetyVerdict(label, round(prob, 4), "promptguard", f"raw={str(resp.content)[:40]}")
+
+
 def check_input(message: str, usage: Usage | None = None, use_llm: bool | None = None) -> SafetyVerdict:
     score, hits = heuristic_score(message)
     if score >= 1.0:
         return SafetyVerdict("injection", score, "heuristic", ", ".join(hits)[:200])
 
     s = get_settings()
-    use_llm = s.injection_llm_check and s.llm_available if use_llm is None else use_llm
+    mode = s.safety_classifier
+    available = bool(s.groq_api_key) if mode == "promptguard" else s.llm_available
+    use_llm = mode != "off" and available if use_llm is None else use_llm
     if not use_llm:
         return SafetyVerdict("safe", score, "heuristic" if score else "disabled")
 
     r = get_redis()
-    key = "safety:" + hashlib.sha256(message.encode()).hexdigest()
+    key = f"safety:{mode}:" + hashlib.sha256(message.encode()).hexdigest()
     cached = r.get(key)
     if cached:
         return SafetyVerdict(**{**json.loads(cached), "source": "cache"})
     try:
-        verdict = _llm_classify(message, usage)
+        verdict = _prompt_guard_classify(message, usage) if mode == "promptguard" else _llm_classify(message, usage)
     except Exception as e:  # classifier outage must not take the helpdesk down: fail open on layer 2 only
         log.warning("safety_classifier_failed", error=type(e).__name__)
         return SafetyVerdict("safe", score, "heuristic", "llm classifier unavailable")

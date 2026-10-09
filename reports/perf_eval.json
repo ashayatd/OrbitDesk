@@ -1,0 +1,42 @@
+{
+  "mode": "retrieval_only (no GROQ_API_KEY)",
+  "config": {
+    "chunk_size": 300,
+    "top_k": 5,
+    "rerank": true,
+    "hybrid": true,
+    "store": "chroma",
+    "prompt_version": "v1"
+  },
+  "stages_ms": {
+    "embed_query": {
+      "p50": 10.6,
+      "p95": 12.5,
+      "n": 40
+    },
+    "vector_search": {
+      "p50": 3.1,
+      "p95": 3.7,
+      "n": 40
+    },
+    "bm25_search": {
+      "p50": 0.2,
+      "p95": 6.7,
+      "n": 40
+    },
+    "fusion": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "n": 40
+    },
+    "rerank": {
+      "p50": 138.4,
+      "p95": 159.2,
+      "n": 40
+    }
+  },
+  "total_retrieval_ms": {
+    "p50": 152.8,
+    "p95": 183.4
+  }
+}

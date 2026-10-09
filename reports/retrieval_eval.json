@@ -1,0 +1,150 @@
+{
+  "config": {
+    "chunk_size": 300,
+    "top_k": 5,
+    "rerank": true,
+    "hybrid": true,
+    "store": "chroma",
+    "prompt_version": "v1"
+  },
+  "metrics": {
+    "recall_at_k": 1.0,
+    "mrr": 0.9621,
+    "no_answer_accuracy": 0.95,
+    "refusal_rate_on_unanswerable": 1.0,
+    "false_refusal_rate_on_answerable": 0.0606,
+    "leaks": 0,
+    "latency_p50_ms": 167.1,
+    "latency_p95_ms": 210.9,
+    "n_questions": 40
+  },
+  "per_type": {
+    "single": {
+      "recall_at_k": 1.0,
+      "mrr": 0.9643,
+      "no_answer_accuracy": 0.9048,
+      "refusal_rate_on_unanswerable": 0.0,
+      "false_refusal_rate_on_answerable": 0.0952,
+      "leaks": 0,
+      "latency_p50_ms": 176.1,
+      "latency_p95_ms": 214.2,
+      "n_questions": 21
+    },
+    "multi_doc": {
+      "recall_at_k": 1.0,
+      "mrr": 0.9,
+      "no_answer_accuracy": 1.0,
+      "refusal_rate_on_unanswerable": 0.0,
+      "false_refusal_rate_on_answerable": 0.0,
+      "leaks": 0,
+      "latency_p50_ms": 169.2,
+      "latency_p95_ms": 205.2,
+      "n_questions": 5
+    },
+    "follow_up": {
+      "recall_at_k": 1.0,
+      "mrr": 1.0,
+      "no_answer_accuracy": 1.0,
+      "refusal_rate_on_unanswerable": 0.0,
+      "false_refusal_rate_on_answerable": 0.0,
+      "leaks": 0,
+      "latency_p50_ms": 140.1,
+      "latency_p95_ms": 157.1,
+      "n_questions": 5
+    },
+    "unanswerable": {
+      "no_answer_accuracy": 1.0
+    },
+    "role_restricted": {
+      "recall_at_k": 1.0,
+      "mrr": 1.0,
+      "no_answer_accuracy": 1.0,
+      "refusal_rate_on_unanswerable": 1.0,
+      "false_refusal_rate_on_answerable": 0.0,
+      "leaks": 0,
+      "latency_p50_ms": 163.8,
+      "latency_p95_ms": 187.3,
+      "n_questions": 4
+    }
+  },
+  "leak_test": {
+    "queries": 198,
+    "leaks": 0,
+    "examples": []
+  },
+  "threshold_sweep": [
+    {
+      "threshold": -8,
+      "no_answer_accuracy": 0.95
+    },
+    {
+      "threshold": -6,
+      "no_answer_accuracy": 0.95
+    },
+    {
+      "threshold": -5,
+      "no_answer_accuracy": 0.975
+    },
+    {
+      "threshold": -4,
+      "no_answer_accuracy": 0.95
+    },
+    {
+      "threshold": -3,
+      "no_answer_accuracy": 0.95
+    },
+    {
+      "threshold": -2,
+      "no_answer_accuracy": 0.95
+    },
+    {
+      "threshold": -1,
+      "no_answer_accuracy": 0.925
+    },
+    {
+      "threshold": 0,
+      "no_answer_accuracy": 0.85
+    },
+    {
+      "threshold": 1,
+      "no_answer_accuracy": 0.85
+    },
+    {
+      "threshold": 2,
+      "no_answer_accuracy": 0.85
+    }
+  ],
+  "stage_latency_ms_median": {
+    "embed_query": 11.02,
+    "vector_search": 2.79,
+    "bm25_search": 0.23,
+    "fusion": 0.03,
+    "rerank": 151.78
+  },
+  "misses": [
+    {
+      "id": "q03",
+      "question": "I was off sick for three days. Do I need a doctor's note?",
+      "role": "employee",
+      "found": false,
+      "top_score": -4.29,
+      "retrieved": [
+        "leave-policy|3. Sick Leave",
+        "leave-policy|2.2 Requesting Annual Leave",
+        "leave-policy|5. Bereavement Leave"
+      ]
+    },
+    {
+      "id": "q09",
+      "question": "Do I need a receipt for a 20 dollar taxi ride?",
+      "role": "employee",
+      "found": false,
+      "top_score": -6.42,
+      "retrieved": [
+        "travel-reimbursement|4.2 Receipts",
+        "travel-reimbursement|2.3 Ground Transport",
+        "code-of-conduct|3. Gifts and Hospitality"
+      ]
+    }
+  ]
+}

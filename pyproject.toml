@@ -36,9 +36,8 @@ dependencies = [
     "rq>=1.16",
     "structlog>=24.1",
     "tenacity>=8.5",
-    # Observability + experiments
+    # Observability
     "langfuse>=2.50",
-    "mlflow-skinny>=2.16",
 ]
 
 [dependency-groups]
@@ -50,8 +49,10 @@ dev = [
     "reportlab>=4.2",
 ]
 eval = [
-    "ragas>=0.2",
+    "ragas>=0.4.3",
     "datasets>=2.20",
+    "mlflow-skinny>=3.0",
+    "alembic>=1.13",  # MLflow's SQLite backend (the plain file store is in maintenance mode)
 ]
 finetuned = [
     "peft>=0.12",
@@ -87,3 +88,6 @@ markers = [
     "needs_llm: requires GROQ_API_KEY (skipped otherwise)",
     "slow: loads local ML models",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"evals/render_results.py" = ["E501"]  # long prose sentences in f-strings read better unwrapped

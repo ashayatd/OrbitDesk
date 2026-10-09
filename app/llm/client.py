@@ -1,7 +1,7 @@
 """LLM access with timeouts, retries and a fallback chain.
 
-    main tier : Groq 70B -> Groq 8B -> OpenRouter (if FALLBACK_PROVIDER_KEY)
-    small tier: Groq 8B  -> Groq 70B -> OpenRouter
+    main tier : Groq gpt-oss-120b -> Groq gpt-oss-20b -> OpenRouter (if FALLBACK_PROVIDER_KEY)
+    small tier: Groq gpt-oss-20b  -> Groq gpt-oss-120b -> OpenRouter
 
 Each model is wrapped in `.with_retry()` (exponential backoff + jitter, transient
 errors only), and the chain in `.with_fallbacks()` (any error: timeout, 5xx,
@@ -18,6 +18,11 @@ from app.config import get_settings
 from app.errors import LLMUnavailableError
 
 Tier = Literal["main", "small"]
+REASONING_HEADROOM = 1024
+
+
+def is_reasoning_model(model: str) -> bool:
+    return model.startswith("openai/gpt-oss") or "qwen3" in model
 
 
 def _transient_errors() -> tuple[type[BaseException], ...]:
@@ -44,6 +49,12 @@ def groq_model(model: str, temperature: float = 0.0, max_tokens: int | None = No
     from langchain_groq import ChatGroq
 
     s = get_settings()
+    extra = {}
+    if is_reasoning_model(model):
+        # Hidden reasoning tokens count against max_tokens: leave headroom or the visible
+        # answer gets cut off (a router asked for 30 tokens would return nothing).
+        extra["reasoning_effort"] = s.reasoning_effort
+        max_tokens = (max_tokens or 0) + REASONING_HEADROOM if max_tokens else None
     return ChatGroq(
         model=model,
         api_key=s.groq_api_key,
@@ -51,6 +62,7 @@ def groq_model(model: str, temperature: float = 0.0, max_tokens: int | None = No
         max_tokens=max_tokens,
         request_timeout=s.llm_timeout_s,
         max_retries=0,  # retries are handled by .with_retry so behaviour is uniform across providers
+        **extra,
     )
 
 
@@ -80,7 +92,7 @@ def candidate_models(tier: Tier, temperature: float = 0.0, max_tokens: int | Non
         models += [groq_model(m, temperature, max_tokens) for m in dict.fromkeys(order)]
     if s.fallback_provider_key:
         models.append(openrouter_model(s.fallback_chat_model, temperature, max_tokens))
-    return models
+    return models if s.llm_fallbacks_enabled else models[:1]
 
 
 def get_llm(

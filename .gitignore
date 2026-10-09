@@ -34,3 +34,4 @@ finetune/outputs/
 Thumbs.db
 .vscode/
 .idea/
+data/eval_indexes/

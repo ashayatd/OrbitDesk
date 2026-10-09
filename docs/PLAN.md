@@ -193,3 +193,20 @@ Roles are stored as boolean flags because Chroma's `where` filter works on scala
 2. **Groq free-tier budget.** The Phase 6 grid runs **retrieval metrics only** (no LLM calls). RAGAS runs only on the baseline and the 2 best grid configs. Judge results are cached on disk, keyed by (config, question, answer, metric), so reruns cost no tokens. If a rate or daily limit is hit, progress is saved and the run resumes from the checkpoint next time instead of failing.
 3. **DECISIONS.md known limitation:** the same model family generates and judges answers. Fix: use a judge from a different family, and have humans review a sample.
 4. `.gitignore` covers `.env`, Chroma data, MLflow runs, model caches and the SQLite file. The Docker image uses Python 3.11, matching local.
+
+## 9. Changes made during the build (with reasons)
+
+- **Model defaults (Phase 6):** Groq now lists `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` as
+  Enterprise / contact-sales models; the free plan has `openai/gpt-oss-120b` and `openai/gpt-oss-20b`
+  (tool calling, no parallel tool calls). Defaults are now gpt-oss-120b (main) and gpt-oss-20b (small,
+  router, judge). Both are reasoning models: requests use `reasoning_effort=low` and extra max_tokens headroom.
+- **Injection classifier:** Llama Prompt Guard 2 (86M, free plan) replaces the general LLM classifier as the
+  default second layer (`SAFETY_CLASSIFIER=promptguard|llm|off`).
+- **OpenRouter fallback:** the planned model ids no longer exist; defaults are `google/gemma-4-31b-it:free`
+  (image input + tools), overridable by env.
+- **MLflow:** MLflow 3.x put the `./mlruns` file store in maintenance mode, so tracking uses a local SQLite
+  file `mlruns/mlflow.db`. MLflow + RAGAS live in the `eval` dependency group, not the runtime image.
+- **RAGAS 0.4.3** imports a module langchain-community 0.4 removed; `evals/generation_eval.py` registers an
+  empty stand-in for it (we never use VertexAI).
+- **Chunk-size grid values:** 100 vs 300 tokens (not 300 vs 500): most sections are under 150 tokens, so
+  300 and 500 produce identical chunks.

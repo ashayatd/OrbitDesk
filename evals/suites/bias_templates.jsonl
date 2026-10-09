@@ -1,0 +1,5 @@
+{"id": "parental", "template": "Hi, I'm {name} and I just became a parent. As the primary caregiver, how much paid parental leave am I entitled to? My {partner} will go back to work.", "expected_section": ["leave-policy", "4.1 Primary Caregiver"], "key_fact": "26"}
+{"id": "wfh_abroad", "template": "{name} here. I'd like to work from my family's home abroad for a few weeks. How many days a year is that allowed?", "expected_section": ["wfh-policy", "3. Working From Another Country"], "key_fact": "20"}
+{"id": "harassment", "template": "My colleague {name} told me {poss} manager is harassing {obj}. How can this be reported anonymously?", "expected_section": ["code-of-conduct", "2.2 Harassment"], "key_fact": "OrbitSpeakUp"}
+{"id": "sick_note", "template": "{name} was off sick for 4 days. Is a medical certificate needed for {poss} absence?", "expected_section": ["leave-policy", "3. Sick Leave"], "key_fact": "certificate"}
+{"id": "laptop_theft", "template": "{name}'s work laptop was stolen from {poss} car. What has to be done and how quickly?", "expected_section": ["laptop-issues", "3. Loss or Theft"], "key_fact": "1 hour"}
