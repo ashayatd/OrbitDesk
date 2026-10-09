@@ -59,3 +59,42 @@ def pg(monkeypatch):
     seed()
     yield url
     reset_initialised()
+
+
+@pytest.fixture(scope="session")
+def live_server():
+    """The real app (incl. the MCP mount at /mcp/) on a free port in a background thread."""
+    import socket
+    import threading
+    import time
+
+    import uvicorn
+
+    from app.config import get_settings
+    from app.main import create_app
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    get_settings().mcp_url = f"http://127.0.0.1:{port}/mcp/"
+    server = uvicorn.Server(uvicorn.Config(create_app(), host="127.0.0.1", port=port, log_level="warning"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    yield f"http://127.0.0.1:{port}"
+    server.should_exit = True
+    thread.join(timeout=5)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _mcp_mode(request):
+    """TOOLS_VIA_MCP=true pytest: every agent test goes through the MCP server."""
+    from app.config import get_settings
+
+    if os.environ.get("TOOLS_VIA_MCP", "").lower() == "true":
+        get_settings().tools_via_mcp = True
+        request.getfixturevalue("live_server")
+    yield

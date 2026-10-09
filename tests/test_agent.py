@@ -1,5 +1,6 @@
 """Agent, actions, router and memory tests: fake LLM, fake router, no keys."""
 
+import json
 import threading
 
 import pytest
@@ -182,3 +183,37 @@ def test_agent_endpoints_without_key():
     assert ok.status_code == 200 and ok.json()["status"] == "created"
     again = client.post("/agent/confirm", json={"confirmation_id": action.confirmation_id, "employee_id": "E1001"})
     assert again.json()["status"] == "duplicate"
+
+
+# ---------------- ticket_analytics through the agent (runs in-process or via MCP) ----------------
+
+
+def test_admin_agent_runs_ticket_analytics(monkeypatch):
+    import app.analytics.text_to_sql as t2s
+
+    monkeypatch.setattr(
+        t2s, "generate_sql", lambda q, usage: "SELECT priority, COUNT(*) AS n FROM v_tickets GROUP BY priority"
+    )
+    monkeypatch.setattr(
+        graph_mod,
+        "get_llm",
+        scripted(
+            tool_call("ticket_analytics", {"question": "tickets per priority"}),
+            AIMessage(content="Here are the counts."),
+        ),
+    )
+    out = AgentRunner(FixedRouter("action"), rag=None, memory=SessionMemory(get_redis())).run(
+        "how many tickets per priority?", "a1", "it_admin", "E1004"
+    )
+    call = out["tool_calls"][0]
+    assert call["tool"] == "ticket_analytics"
+    result = json.loads(call["result"]) if call["result"].endswith("}") else {"sql": call["result"]}
+    assert "SELECT priority" in result["sql"] and "LIMIT" in result["sql"]
+
+
+def test_employee_agent_has_no_analytics_tool():
+    from app.agent.tools import build_tools
+
+    names = {t.name for t in build_tools(AgentContext("E1001", "employee", "s"), rag_pipeline=None)}
+    assert "ticket_analytics" not in names
+    assert {"get_leave_balance", "create_ticket", "get_ticket_status", "search_policies"} <= names

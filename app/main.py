@@ -57,7 +57,8 @@ async def lifespan(app: FastAPI):
     if get_settings().ingest_on_startup:
         # Background thread: /health is up immediately; unchanged docs are skipped by hash.
         threading.Thread(target=_startup_ingest, daemon=True, name="startup-ingest").start()
-    yield
+    async with app.state.mcp.session_manager.run():  # MCP streamable HTTP at /mcp/
+        yield
     log.info("shutdown")
 
 
@@ -88,6 +89,13 @@ def create_app() -> FastAPI:
     app.include_router(agent.router)
     app.include_router(multimodal.router)
     app.include_router(feedback.router)
+
+    # MCP server (streamable HTTP, bearer-token auth) inside the same service.
+    from app.mcp_server.server import build_server
+
+    mcp = build_server(http=True, base_url=get_settings().mcp_url.rstrip("/").removesuffix("/mcp"))
+    app.state.mcp = mcp
+    app.mount("/mcp", mcp.streamable_http_app())
 
     @app.exception_handler(LLMUnavailableError)
     async def _llm_unavailable(_: Request, exc: LLMUnavailableError) -> JSONResponse:

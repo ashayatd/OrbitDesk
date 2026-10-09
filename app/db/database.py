@@ -7,6 +7,7 @@ Core (tables + SQL expressions) rather than the ORM: the queries stay visible an
 explain, and dialect-specific features (ON CONFLICT, FOR UPDATE, SET ROLE) are explicit.
 """
 
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
@@ -181,8 +182,7 @@ def get_engine(url: str | None = None) -> Engine:
         def _sqlite_pragmas(dbapi_conn, _):
             dbapi_conn.isolation_level = None  # let SQLAlchemy emit BEGIN (below)
             cur = dbapi_conn.cursor()
-            cur.execute("PRAGMA journal_mode=WAL")  # api + worker share the file
-            cur.execute("PRAGMA foreign_keys=ON")
+            cur.execute("PRAGMA foreign_keys=ON")  # per connection; WAL mode is set once in init_db
             cur.close()
 
         @event.listens_for(engine, "begin")
@@ -210,24 +210,34 @@ def db_session(path: Path | None = None) -> Iterator[Connection]:
 
 
 _initialised: set[str] = set()
+_init_lock = threading.Lock()
 
 
 def init_db(path: Path | None = None) -> None:
-    """Create tables, indexes, analytics views (and on Postgres the read-only role). Idempotent."""
+    """Create tables, indexes, analytics views (and on Postgres the read-only role). Idempotent,
+    and serialised per process: several threads may hit a fresh database at the same moment."""
     url = database_url(path)
     if url in _initialised:
         return
-    engine = get_engine(url)
-    metadata.create_all(engine)
-    with engine.begin() as conn:
-        for name, sql in ANALYTICS_VIEWS.items():
-            if is_postgres(engine):
-                conn.execute(text(f"CREATE OR REPLACE VIEW {name} AS {sql}"))
-            else:
-                conn.execute(text(f"CREATE VIEW IF NOT EXISTS {name} AS {sql}"))
-    if is_postgres(engine):
-        _create_analytics_role(engine)
-    _initialised.add(url)
+    with _init_lock:
+        if url in _initialised:
+            return
+        engine = get_engine(url)
+        if not is_postgres(engine):
+            # WAL lets the api and worker read while one writes. It's stored in the DB file, so set it once
+            # here: running it on every new connection races when several connect to a fresh file at once.
+            with engine.connect() as conn:
+                conn.connection.driver_connection.execute("PRAGMA journal_mode=WAL")
+        metadata.create_all(engine)
+        with engine.begin() as conn:
+            for name, sql in ANALYTICS_VIEWS.items():
+                if is_postgres(engine):
+                    conn.execute(text(f"CREATE OR REPLACE VIEW {name} AS {sql}"))
+                else:
+                    conn.execute(text(f"CREATE VIEW IF NOT EXISTS {name} AS {sql}"))
+        if is_postgres(engine):
+            _create_analytics_role(engine)
+        _initialised.add(url)
     if not get_settings().database_url and path is None:
         log.info("database_fallback_sqlite", url=url, hint="set DATABASE_URL to use Postgres")
 
