@@ -48,6 +48,7 @@ class Settings(BaseSettings):
 
     # --- Infra ---
     redis_url: str = "redis://localhost:6379/0"
+    chroma_url: str = ""  # e.g. http://chroma:8000 ; empty = embedded on-disk Chroma
     queue_mode: str = "rq"  # rq (worker process) | inline (run job in-process, no worker needed)
     data_dir: Path = ROOT_DIR / "data"
     docs_dir: Path = ROOT_DIR / "data" / "docs"
@@ -61,6 +62,7 @@ class Settings(BaseSettings):
     vector_backend: str = "chroma"  # chroma | faiss
     chunk_size: int = 300  # tokens (embedding tokenizer); model limit is 512
     chunk_overlap: int = 45
+    embed_batch_size: int = 8  # fastest on CPU in reports/embedding_benchmark.json
     candidate_k: int = 20  # per retriever, before fusion
     top_k: int = 5  # after rerank
     use_hybrid: bool = True

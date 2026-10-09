@@ -1,0 +1,88 @@
+# Metadata for every source document. allowed_roles is enforced at retrieval time
+# (pre-filter), so a role never even scores chunks it may not see.
+# Roles: employee | hr | it_admin
+documents:
+  - doc_id: leave-policy
+    file: leave-policy.md
+    title: Leave Policy
+    department: HR
+    allowed_roles: [employee, hr, it_admin]
+    version: "3.2"
+    updated_at: "2026-01-15"
+  - doc_id: travel-reimbursement
+    file: travel-reimbursement.pdf
+    title: Travel and Expense Reimbursement Policy
+    department: Finance
+    allowed_roles: [employee, hr, it_admin]
+    version: "2.0"
+    updated_at: "2026-03-01"
+  - doc_id: code-of-conduct
+    file: code-of-conduct.pdf
+    title: Code of Conduct
+    department: HR
+    allowed_roles: [employee, hr, it_admin]
+    version: "5.1"
+    updated_at: "2025-11-20"
+  - doc_id: wfh-policy
+    file: wfh-policy.md
+    title: Work From Home Policy
+    department: HR
+    allowed_roles: [employee, hr, it_admin]
+    version: "1.4"
+    updated_at: "2026-02-10"
+  - doc_id: vpn-setup
+    file: vpn-setup.md
+    title: VPN Setup Guide
+    department: IT
+    allowed_roles: [employee, hr, it_admin]
+    version: "4.0"
+    updated_at: "2026-04-05"
+  - doc_id: password-reset
+    file: password-reset.md
+    title: Password Reset Guide
+    department: IT
+    allowed_roles: [employee, hr, it_admin]
+    version: "2.3"
+    updated_at: "2026-02-28"
+  - doc_id: laptop-issues
+    file: laptop-issues.md
+    title: Laptop Troubleshooting Runbook
+    department: IT
+    allowed_roles: [employee, hr, it_admin]
+    version: "1.7"
+    updated_at: "2026-05-12"
+  - doc_id: onboarding-checklist
+    file: onboarding-checklist.md
+    title: New Joiner Onboarding Checklist
+    department: HR
+    allowed_roles: [employee, hr, it_admin]
+    version: "2.1"
+    updated_at: "2026-01-05"
+  - doc_id: incident-escalation
+    file: incident-escalation.md
+    title: IT Incident Escalation Runbook
+    department: IT
+    allowed_roles: [employee, hr, it_admin]
+    version: "3.0"
+    updated_at: "2026-06-18"
+  - doc_id: software-requests
+    file: software-requests.md
+    title: Software and Access Requests
+    department: IT
+    allowed_roles: [employee, hr, it_admin]
+    version: "1.2"
+    updated_at: "2026-03-22"
+  - doc_id: salary-bands
+    file: salary-bands.md
+    title: Salary Bands 2026 (HR Confidential)
+    department: HR
+    allowed_roles: [hr]
+    version: "2026.1"
+    updated_at: "2026-01-02"
+  - doc_id: privileged-access
+    file: privileged-access.md
+    title: Privileged Access Management Runbook
+    department: IT
+    allowed_roles: [it_admin]
+    version: "1.1"
+    updated_at: "2026-04-30"
