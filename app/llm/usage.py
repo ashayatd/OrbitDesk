@@ -15,6 +15,7 @@ class Usage:
     cost_known: bool = True
     estimated: bool = False  # True if a provider didn't report usage and we approximated it
     calls: list[dict] = field(default_factory=list)
+    trace_id: str | None = None  # request id; groups this request's LLM calls into one Langfuse trace
 
     def add(self, stage: str, model: str, input_tokens: int, output_tokens: int, estimated: bool = False) -> None:
         self.input_tokens += input_tokens

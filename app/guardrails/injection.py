@@ -25,6 +25,7 @@ from app.infra.redis_client import get_redis
 from app.llm.client import get_llm, groq_model
 from app.llm.usage import Usage
 from app.log import get_logger
+from app.observability.tracing import traced
 from app.rag.prompts import load_prompt
 
 log = get_logger(__name__)
@@ -101,7 +102,7 @@ def is_suspicious_chunk(text: str) -> bool:
 def _llm_classify(message: str, usage: Usage | None) -> SafetyVerdict:
     p = load_prompt("safety", "v1")
     msgs = [SystemMessage(p["system"]), HumanMessage(p["user_template"].format(message=message))]
-    resp = get_llm("small", max_tokens=60).invoke(msgs)
+    resp = get_llm("small", max_tokens=60).invoke(msgs, config=traced(usage))
     if usage is not None:
         usage.add_message("safety", resp, prompt_chars=sum(len(m.content) for m in msgs))
     text = str(resp.content)
@@ -126,7 +127,7 @@ def parse_prompt_guard(text: str) -> float:
 
 def _prompt_guard_classify(message: str, usage: Usage | None) -> SafetyVerdict:
     s = get_settings()
-    resp = groq_model(s.groq_safety_model, max_tokens=20).invoke([HumanMessage(message[:2000])])
+    resp = groq_model(s.groq_safety_model, max_tokens=20).invoke([HumanMessage(message[:2000])], config=traced(usage))
     if usage is not None:
         usage.add_message("safety", resp, prompt_chars=len(message))
     prob = parse_prompt_guard(str(resp.content))

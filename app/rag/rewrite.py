@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.llm.client import get_llm
 from app.llm.usage import Usage
+from app.observability.tracing import traced
 from app.rag.prompts import load_prompt
 
 _FOLLOWUP = re.compile(
@@ -36,7 +37,7 @@ def rewrite_question(question: str, history: list[dict], usage: Usage) -> str:
         SystemMessage(p["system"]),
         HumanMessage(p["user_template"].format(history=format_history(history), question=question)),
     ]
-    resp = get_llm("small", max_tokens=80).invoke(msgs)
+    resp = get_llm("small", max_tokens=80).invoke(msgs, config=traced(usage))
     usage.add_message("rewrite", resp, prompt_chars=sum(len(m.content) for m in msgs))
     text = str(resp.content).strip().strip('"').splitlines()[0] if str(resp.content).strip() else ""
     return text or question

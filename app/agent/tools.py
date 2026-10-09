@@ -54,8 +54,9 @@ class TicketStatusArgs(BaseModel):
 def build_tools(ctx: AgentContext, rag_pipeline) -> list[StructuredTool]:
     def search_policies(question: str) -> str:
         """Search Orbit Systems HR policies and IT runbooks; returns a cited answer."""
-        events = rag_pipeline.run(
+        events = rag_pipeline.run(  # request id = the agent's trace id, so one trace per agent turn
             AskRequest(question=question, session_id=ctx.session_id, role=ctx.role, stream=False),
+            ctx.usage.trace_id,
             use_memory=False,
         )
         res = [d for n, d in events if n == "result"][0]

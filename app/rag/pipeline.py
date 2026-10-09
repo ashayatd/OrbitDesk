@@ -29,6 +29,7 @@ from app.guardrails.pii import mask_pii
 from app.llm.client import get_llm
 from app.llm.usage import Usage
 from app.log import get_logger
+from app.observability.tracing import traced
 from app.rag.citations import strip_invalid_citations, verify_citations
 from app.rag.output import MetaSplitter
 from app.rag.prompts import build_answer_messages
@@ -78,7 +79,7 @@ class RagPipeline:
         request_id = request_id or uuid.uuid4().hex
         t_start = time.perf_counter()
         timings: dict[str, float] = {}
-        usage = Usage()
+        usage = Usage(trace_id=request_id)
         guard: dict[str, Any] = {}
 
         # 0. Input guardrails. The masked question is the only version used from here on
@@ -216,7 +217,7 @@ class RagPipeline:
         llm = get_llm("main", max_tokens=600)
         splitter, full, so_far, blocked = MetaSplitter(), None, "", None
         t0 = time.perf_counter()
-        for chunk in llm.stream(msgs):
+        for chunk in llm.stream(msgs, config=traced(usage)):
             if full is None:
                 timings["llm_first_token"] = _ms(t0)
                 full = chunk

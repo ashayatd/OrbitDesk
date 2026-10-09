@@ -20,6 +20,8 @@ class PendingActionOut(BaseModel):
 
 
 class AgentResponse(BaseModel):
+    request_id: str | None = None  # also the Langfuse trace seed; send it back with /feedback
+    question: str = ""  # the message after PII masking
     reply: str
     route: dict
     pending_action: PendingActionOut | None = None

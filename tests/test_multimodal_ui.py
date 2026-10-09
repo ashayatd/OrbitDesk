@@ -38,7 +38,7 @@ def test_vision_falls_back_to_openrouter_then_reports_unavailable(monkeypatch):
         def __init__(self, name):
             self.name = name
 
-        def invoke(self, msgs):
+        def invoke(self, msgs, config=None):
             calls.append(self.name)
             raise RuntimeError("model_decommissioned")
 
@@ -66,11 +66,11 @@ def test_vision_fallback_success(monkeypatch):
     monkeypatch.setattr(s, "fallback_provider_key", "fake2")
 
     class Broken:
-        def invoke(self, msgs):
+        def invoke(self, msgs, config=None):
             raise RuntimeError("404 model not found")
 
     class Works:
-        def invoke(self, msgs):
+        def invoke(self, msgs, config=None):
             return AIMessage(
                 content='{"error_code": "VPN-809", "error_message": "Gateway unreachable", '
                 '"application": "OrbitConnect", "search_query": "How do I fix VPN-809?"}'

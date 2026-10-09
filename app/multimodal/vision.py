@@ -20,6 +20,7 @@ from app.errors import ImageInputUnavailableError
 from app.llm.client import groq_model, openrouter_model
 from app.llm.usage import Usage
 from app.log import get_logger
+from app.observability.tracing import traced
 
 log = get_logger(__name__)
 MAX_IMAGE_BYTES = 4 * 1024 * 1024  # base64-encoded request limit on Groq
@@ -81,7 +82,7 @@ def extract_error(image: bytes, mime: str, usage: Usage) -> VisionResult:
     for provider, model, factory in providers:
         t0 = time.perf_counter()
         try:
-            resp = factory().invoke(msgs)
+            resp = factory().invoke(msgs, config=traced(usage))
         except Exception as e:  # decommissioned model (404), timeout, 5xx, quota...
             attempts.append({"provider": provider, "model": model, "error": type(e).__name__})
             log.warning("vision_provider_failed", provider=provider, model=model, error=type(e).__name__)

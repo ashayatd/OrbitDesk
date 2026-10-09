@@ -17,6 +17,7 @@ from app.infra.redis_client import get_redis
 from app.llm.usage import Usage
 from app.multimodal.stt import transcribe
 from app.multimodal.vision import IMAGE_TYPES, extract_error
+from app.observability.request_log import logged, save_feedback
 from app.schemas.ask import AskRequest, AskResponse
 from app.services import get_agent_runner, get_rag_pipeline
 
@@ -58,23 +59,32 @@ def _error_text(e: Exception) -> str:
 
 # ---------------- Ask ----------------
 def ask_stream(question: str, history: list, role: str, session_id: str):
+    """Yields (chat, textbox, details, last request id). gr.skip() leaves an output unchanged."""
     if not question.strip():
-        yield history, "", ""
+        yield history, "", "", gr.skip()
         return
     history = history + [{"role": "user", "content": question}, {"role": "assistant", "content": ""}]
     try:
-        for name, data in get_rag_pipeline().run(AskRequest(question=question, session_id=session_id, role=role)):
+        events = get_rag_pipeline().run(AskRequest(question=question, session_id=session_id, role=role))
+        for name, data in logged(events, "/ui/ask", session_id, role, question):
             if name == "token":
                 history[-1]["content"] += data
-                yield history, "", ""
+                yield history, "", "", gr.skip()
             elif name == "replace":
                 history[-1]["content"] = data["text"]
             elif name == "result":
                 history[-1]["content"] = data.answer
-                yield history, "", _details(data)
+                yield history, "", _details(data), data.request_id
     except Exception as e:
         history[-1]["content"] = _error_text(e)
-        yield history, "", ""
+        yield history, "", "", gr.skip()
+
+
+def send_feedback(rating: str, comment: str, request_id: str | None, session_id: str):
+    if not request_id:
+        return "Ask a question first.", ""
+    save_feedback(request_id, session_id, rating, comment or None)
+    return f"Thanks, feedback ({'👍' if rating == 'up' else '👎'}) saved.", ""
 
 
 # ---------------- Agent ----------------
@@ -141,7 +151,9 @@ def image_ask(image_path: str | None, role: str, session_id: str):
 
 
 def _collect(req: AskRequest) -> AskResponse:
-    return [d for n, d in get_rag_pipeline().run(req) if n == "result"][0]
+    return [
+        d for n, d in logged(get_rag_pipeline().run(req), "/ui/multimodal", req.session_id, req.role) if n == "result"
+    ][0]
 
 
 def build_ui() -> gr.Blocks:
@@ -162,7 +174,16 @@ def build_ui() -> gr.Blocks:
                 ],
                 q,
             )
-            q.submit(ask_stream, [q, chat, role, session], [chat, q, details])
+            last_rid = gr.State(None)
+            with gr.Row():
+                up, down = gr.Button("👍 Helpful"), gr.Button("👎 Not helpful")
+                comment = gr.Textbox(placeholder="Optional comment", show_label=False, scale=3)
+            fb_status = gr.Markdown()
+            q.submit(ask_stream, [q, chat, role, session], [chat, q, details, last_rid])
+            up.click(lambda c, r, s: send_feedback("up", c, r, s), [comment, last_rid, session], [fb_status, comment])
+            down.click(
+                lambda c, r, s: send_feedback("down", c, r, s), [comment, last_rid, session], [fb_status, comment]
+            )
         with gr.Tab("Agent"):
             emp = gr.Dropdown(EMPLOYEE_CHOICES, value="E1001", label="Signed in as")
             achat = gr.Chatbot(height=380, label="OrbitDesk agent")

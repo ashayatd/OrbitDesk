@@ -1,6 +1,7 @@
 """POST /voice (audio -> Whisper -> /ask flow) and POST /image (screenshot -> vision -> IT runbooks)."""
 
 import time
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -11,6 +12,7 @@ from app.deps import rate_limit
 from app.llm.usage import Usage
 from app.multimodal.stt import AUDIO_SUFFIXES, MAX_AUDIO_BYTES, transcribe
 from app.multimodal.vision import IMAGE_TYPES, MAX_IMAGE_BYTES, extract_error
+from app.observability.request_log import logged
 from app.schemas.ask import AskRequest, Role
 from app.services import get_rag_pipeline
 
@@ -35,7 +37,7 @@ async def voice(
     if not transcript.text:
         raise HTTPException(422, "no speech detected in the audio")
     req = AskRequest(question=transcript.text, session_id=session_id, role=role, stream=False)
-    answer = await run_in_threadpool(collect, get_rag_pipeline().run(req))
+    answer = await run_in_threadpool(collect, logged(get_rag_pipeline().run(req), "/voice", session_id, role))
     answer.timings_ms = {"stt": transcript.latency_ms, **answer.timings_ms}
     return {
         "transcript": transcript.text,
@@ -64,7 +66,7 @@ async def image(
         raise HTTPException(413, "image larger than 4 MB")
     rate_limit(session_id)
 
-    usage = Usage()
+    usage = Usage(trace_id=uuid.uuid4().hex)
     t0 = time.perf_counter()
     extracted = await run_in_threadpool(extract_error, data, IMAGE_TYPES[suffix], usage)
     vision_ms = round((time.perf_counter() - t0) * 1000, 1)
@@ -76,7 +78,7 @@ async def image(
 
     # Search IT runbooks only (department pre-filter), still role-filtered.
     req = AskRequest(question=query, session_id=session_id, role=role, stream=False, department="IT")
-    answer = await run_in_threadpool(collect, get_rag_pipeline().run(req))
+    answer = await run_in_threadpool(collect, logged(get_rag_pipeline().run(req), "/image", session_id, role))
     answer.timings_ms = {"vision": vision_ms, **answer.timings_ms}
     return {
         "extracted": {

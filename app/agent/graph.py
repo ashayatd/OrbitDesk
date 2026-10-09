@@ -11,6 +11,7 @@ search_policies for mixed messages ("my laptop was stolen, what do I do? open a 
 """
 
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Annotated, TypedDict
@@ -31,7 +32,9 @@ from app.guardrails.injection import check_input
 from app.guardrails.output import BLOCKED_REPLY, check_output
 from app.guardrails.pii import mask_pii
 from app.llm.client import get_llm
+from app.llm.usage import Usage
 from app.log import get_logger
+from app.observability.tracing import trace_callbacks, traced
 from app.rag.pipeline import RagPipeline
 from app.rag.prompts import load_prompt
 from app.schemas.ask import AskRequest
@@ -77,7 +80,8 @@ class AgentRunner:
 
         def policy(state: AgentState) -> AgentState:
             req = AskRequest(question=state["message"], session_id=ctx.session_id, role=ctx.role, stream=False)
-            res = [d for n, d in self.rag.run(req, use_memory=False) if n == "result"][0]
+            # same request id -> the RAG calls land in the agent's Langfuse trace
+            res = [d for n, d in self.rag.run(req, ctx.usage.trace_id, use_memory=False) if n == "result"][0]
             ctx.usage.merge(usage_from_response(res))
             ctx.citations += [c.model_dump() for c in res.citations]
             return {"reply": res.answer}
@@ -88,7 +92,7 @@ class AgentRunner:
                 return {"stopped": "step_limit", "reply": STEP_LIMIT_REPLY}
             if time.monotonic() > state["deadline"]:
                 return {"stopped": "timeout", "reply": TIMEOUT_REPLY}
-            resp = llm.invoke(state["messages"])
+            resp = llm.invoke(state["messages"], config=traced(ctx.usage))
             ctx.usage.add_message(f"agent_step_{steps + 1}", resp)
             return {"messages": [resp], "steps": steps + 1}
 
@@ -150,7 +154,8 @@ class AgentRunner:
             raise PermissionError(f"unknown employee {employee_id}")
         if employee["role"] != role:
             raise PermissionError("role does not match the employee record")
-        ctx = AgentContext(employee_id=employee_id, role=role, session_id=session_id)
+        request_id = uuid.uuid4().hex
+        ctx = AgentContext(employee_id=employee_id, role=role, session_id=session_id, usage=Usage(trace_id=request_id))
 
         # Input guardrails (same as /ask): length cap, PII masking, injection/unsafe check.
         if len(message) > self.settings.max_question_chars:
@@ -161,7 +166,7 @@ class AgentRunner:
         guard: dict = {"input_check": verdict.to_dict(), **({"pii_masked": masked.counts} if masked.masked else {})}
         if verdict.blocked:
             self.memory.append(session_id, message, REFUSAL_REPLY)
-            return self._response(REFUSAL_REPLY, {}, ctx, {}, t0, guard)
+            return self._response(REFUSAL_REPLY, {}, ctx, {}, t0, guard, message)
 
         timeout = self.settings.agent_timeout_s
         state: AgentState = {
@@ -174,7 +179,8 @@ class AgentRunner:
         # Hard wall-clock cap on top of the in-graph deadline check (which can't interrupt
         # a single slow LLM call). recursion_limit is a second guard against loops.
         pool = ThreadPoolExecutor(max_workers=1)
-        future = pool.submit(graph.invoke, state, {"recursion_limit": 4 * self.settings.agent_max_steps + 6})
+        config = {"recursion_limit": 4 * self.settings.agent_max_steps + 6, "callbacks": trace_callbacks(request_id)}
+        future = pool.submit(graph.invoke, state, config)
         try:
             final = future.result(timeout=timeout + 5)
         except FutureTimeout:
@@ -197,11 +203,15 @@ class AgentRunner:
             guard["output_blocked"] = blocked
             reply = BLOCKED_REPLY
         self.memory.append(session_id, message, reply)
-        return self._response(reply, final.get("route", {}), ctx, final, t0, guard)
+        return self._response(reply, final.get("route", {}), ctx, final, t0, guard, message)
 
     @staticmethod
-    def _response(reply: str, route: dict, ctx: AgentContext, final: dict, t0: float, guard: dict) -> dict:
+    def _response(
+        reply: str, route: dict, ctx: AgentContext, final: dict, t0: float, guard: dict, question: str
+    ) -> dict:
         return {
+            "request_id": ctx.usage.trace_id,
+            "question": question,  # PII-masked
             "reply": reply,
             "route": route,
             "pending_action": ctx.pending[-1].to_dict() if ctx.pending else None,

@@ -13,6 +13,7 @@ from app.deps import rate_limit, require_llm
 from app.errors import LLMUnavailableError
 from app.infra.redis_client import get_redis
 from app.log import get_logger
+from app.observability.request_log import logged
 from app.schemas.ask import AskRequest, AskResponse, SearchRequest
 from app.services import get_rag_pipeline, get_retriever
 
@@ -58,7 +59,7 @@ def collect(events: Iterator[tuple[str, object]]) -> AskResponse:
 @router.post("/ask", response_model=AskResponse)
 async def ask(req: AskRequest, _=Depends(require_llm)):
     rate_limit(req.session_id)
-    events = get_rag_pipeline().run(req)
+    events = logged(get_rag_pipeline().run(req), "/ask", req.session_id, req.role, req.question)
     first = await run_in_threadpool(next, events)  # run input guardrails now: a 400 must not be a 200 stream
     events = _prepend(first, events)
     if req.stream:
