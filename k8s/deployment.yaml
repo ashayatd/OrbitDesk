@@ -1,0 +1,70 @@
+# API deployment (stateless except SQLite, see note) + worker deployment.
+# NOTE: SQLite is fine for the demo but not for >1 API replica across nodes; in a real cluster
+# the mock enterprise DB + request log would move to Postgres. Redis and Chroma run as their own
+# services (e.g. Bitnami Redis chart, chromadb/chroma image) and are not defined here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbitdesk-api
+  labels: {app: orbitdesk, component: api}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: orbitdesk, component: api}
+  template:
+    metadata:
+      labels: {app: orbitdesk, component: api}
+    spec:
+      containers:
+        - name: api
+          image: orbitdesk:latest
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: orbitdesk-config}
+            - secretRef: {name: orbitdesk-secrets, optional: true}
+          resources:
+            requests: {cpu: 500m, memory: 1536Mi}
+            limits: {cpu: "2", memory: 3Gi}
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          volumeMounts: [{name: data, mountPath: /var/orbitdesk}]
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbitdesk-worker
+  labels: {app: orbitdesk, component: worker}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: orbitdesk, component: worker}
+  template:
+    metadata:
+      labels: {app: orbitdesk, component: worker}
+    spec:
+      containers:
+        - name: worker
+          image: orbitdesk:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "worker.py"]
+          envFrom:
+            - configMapRef: {name: orbitdesk-config}
+            - secretRef: {name: orbitdesk-secrets, optional: true}
+          resources:
+            requests: {cpu: 250m, memory: 1Gi}
+            limits: {cpu: "1", memory: 2Gi}
+          volumeMounts: [{name: data, mountPath: /var/orbitdesk}]
+      volumes:
+        - name: data
+          emptyDir: {}

@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-09",
+  "image": "orbitdesk:local (root Dockerfile, the HF Space image)",
+  "image_size_docker_desktop": "3.46GB",
+  "image_size_before_uv_no_cache_fix": "5.6GB",
+  "uv_cache_removed_from_layer": "1.6G",
+  "torch": "2.14.1+cpu (cuda available: False)",
+  "container_smoke_test_no_keys": {
+    "health": "ok, indexed_chunks 91 served by the in-container Chroma server",
+    "ask_status": 503,
+    "search_VPN-809_top_hit": "vpn-setup|4.1 Error VPN-809: Gateway Unreachable",
+    "ui_status": 200,
+    "startup_ingest": "12/12 skipped by content hash (indexed at build time)"
+  },
+  "rq_worker_path": {
+    "ingest_job": "finished, 1 chunk, index_version 0 -> 1",
+    "employee_search_finds_new_doc": true,
+    "hr_role_sees_doc_not_shared_with_hr": false
+  },
+  "docker_compose": {
+    "services_healthy": [
+      "api",
+      "worker",
+      "redis",
+      "chroma"
+    ],
+    "startup_ingest_indexed": 12,
+    "search_hotel_London_top_hit": "travel-reimbursement|2.2 Hotels"
+  },
+  "kind_k8s": "not tested (kind not installed)"
+}

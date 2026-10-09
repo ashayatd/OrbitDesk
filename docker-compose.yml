@@ -1,0 +1,63 @@
+# Local multi-service run: separate api, worker, redis and chroma containers.
+#   docker compose up --build        ->  http://localhost:8000/ui
+# The api ingests data/docs at startup into the chroma service (unchanged docs are skipped).
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  chroma:
+    image: chromadb/chroma:1.5.9   # same version as the chromadb client in uv.lock
+    volumes:
+      - chroma-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000' || exit 1"]
+      interval: 5s
+      retries: 20
+
+  api:
+    build: .
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:   # the image's HEALTHCHECK targets the Space port 7860
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      start_period: 60s
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment: &app-env
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_URL: http://chroma:8000
+      QUEUE_MODE: rq
+      DATA_DIR: /var/orbitdesk     # SQLite (employees, tickets, logs) shared by api + worker
+    volumes:
+      - app-data:/var/orbitdesk
+    depends_on:
+      redis: {condition: service_healthy}
+      chroma: {condition: service_healthy}
+
+  worker:
+    build: .
+    command: ["python", "worker.py"]
+    healthcheck:   # no HTTP server in the worker: check its Redis connection instead
+      test: ["CMD", "python", "-c", "import redis,os; redis.Redis.from_url(os.environ['REDIS_URL']).ping()"]
+      interval: 30s
+    env_file:
+      - path: .env
+        required: false
+    environment: *app-env
+    volumes:
+      - app-data:/var/orbitdesk
+    depends_on:
+      redis: {condition: service_healthy}
+      chroma: {condition: service_healthy}
+
+volumes:
+  chroma-data:
+  app-data:
