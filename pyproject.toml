@@ -1,0 +1,86 @@
+[project]
+name = "orbitdesk"
+version = "0.1.0"
+description = "Enterprise helpdesk copilot for the fictional Orbit Systems: RAG + agent + guardrails + evals"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    # API + UI
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "python-multipart>=0.0.9",
+    "sse-starlette>=2.1",
+    "gradio>=5.0",
+    "httpx>=0.27",
+    # LLM + agent
+    "langchain-core>=0.3",
+    "langchain-groq>=0.2",
+    "langchain-openai>=0.2",
+    "langgraph>=0.2",
+    "groq>=0.11",
+    "openai>=1.40",
+    # Retrieval
+    "torch>=2.3",
+    "sentence-transformers>=3.0",
+    "chromadb>=0.5",
+    "faiss-cpu>=1.8",
+    "rank-bm25>=0.2.2",
+    "numpy>=1.26",
+    # Ingestion
+    "pypdf>=4.3",
+    "pyyaml>=6.0",
+    # Infra
+    "redis>=5.0",
+    "rq>=1.16",
+    "structlog>=24.1",
+    "tenacity>=8.5",
+    # Observability + experiments
+    "langfuse>=2.50",
+    "mlflow-skinny>=2.16",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "fakeredis>=2.24",
+    "ruff>=0.6",
+    "reportlab>=4.2",
+]
+eval = [
+    "ragas>=0.2",
+    "datasets>=2.20",
+]
+finetuned = [
+    "peft>=0.12",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["finetune/*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "needs_llm: requires GROQ_API_KEY (skipped otherwise)",
+    "slow: loads local ML models",
+]

@@ -1,0 +1,36 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local data (rebuilt by scripts)
+data/chroma/
+data/faiss/
+data/uploads/
+data/*.db
+data/*.db-journal
+*.sqlite3
+
+# Experiments / caches
+mlruns/
+mlartifacts/
+.cache/
+hf_cache/
+models/
+evals/.judge_cache/
+evals/.checkpoints/
+finetune/outputs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
