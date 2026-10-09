@@ -74,9 +74,12 @@ With every LLM key empty: ingestion, `/search`, the UI, the admin view and the M
 `/ask`, `/agent`, `/voice` and `/image` return **503** with a message saying which key is missing.
 
 ```powershell
-curl -X POST localhost:8000/search -H "content-type: application/json" -d '{\"query\":\"VPN-809\",\"role\":\"employee\"}'
-curl -N -X POST localhost:8000/ask -H "content-type: application/json" -d '{\"question\":\"How many leave days can I carry over?\",\"session_id\":\"s1\",\"role\":\"employee\"}'
+# Invoke-RestMethod, not curl.exe -d '{\"...\"}': PowerShell 5.1 splits that JSON at the first space
+Invoke-RestMethod http://localhost:8000/search -Method Post -ContentType application/json -Body (@{query="VPN-809 hotel"; role="employee"} | ConvertTo-Json)
+Invoke-RestMethod http://localhost:8000/ask -Method Post -ContentType application/json -Body (@{question="How many leave days can I carry over?"; session_id="s1"; role="employee"; stream=$false} | ConvertTo-Json)
 ```
+
+Step-by-step demo with the exact inputs and expected outputs: [docs/DEMO_CHECKLIST.md](docs/DEMO_CHECKLIST.md).
 
 ## MCP server
 
@@ -128,9 +131,9 @@ them in-process. The whole test suite passes in both modes.
 ## Run the tests and evals
 
 ```powershell
-uv run pytest -q                                            # 156 tests, no keys, SQLite
+uv run pytest -q                                            # 161 passed, 9 skipped (no keys, SQLite)
 $env:TEST_DATABASE_URL="postgresql+psycopg://orbit:orbit@localhost:5432/orbitdesk"
-uv run pytest -q                                            # + 9 Postgres integration tests (165)
+uv run pytest -q                                            # + the 9 Postgres integration tests (170)
 $env:TOOLS_VIA_MCP="true"; uv run pytest -q                 # agent tools through the MCP server
 
 $env:REDIS_URL="fakeredis://"; $env:EVAL_DATABASE_URL=$env:TEST_DATABASE_URL

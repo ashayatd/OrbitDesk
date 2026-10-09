@@ -5,7 +5,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.agent.actions import ConfirmError, confirm_action
 from app.deps import rate_limit, require_llm
-from app.observability.request_log import log_request
+from app.observability.request_log import log_agent_result, log_request
 from app.schemas.agent import AgentRequest, AgentResponse, ConfirmRequest
 from app.services import get_agent_runner
 
@@ -22,20 +22,7 @@ async def agent(req: AgentRequest, _=Depends(require_llm)) -> AgentResponse:
     except Exception as e:
         log_request("/agent", session_id=req.session_id, role=req.role, error=type(e).__name__)
         raise
-    stopped = out.get("stopped") or ""
-    log_request(
-        "/agent",
-        request_id=out["request_id"],
-        session_id=req.session_id,
-        role=req.role,
-        question=out["question"],  # PII-masked by the runner
-        answered=not stopped,
-        latency_ms=out["timings_ms"]["total"],
-        tokens_in=out["tokens"]["input_tokens"],
-        tokens_out=out["tokens"]["output_tokens"],
-        cost_usd=out["tokens"]["cost_usd"],
-        error=stopped if stopped.startswith("error") else None,
-    )
+    log_agent_result("/agent", out, req.session_id, req.role)
     pending = out.pop("pending_action")
     return AgentResponse(
         **out,

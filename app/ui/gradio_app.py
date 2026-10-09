@@ -16,7 +16,7 @@ from app.errors import InputRejectedError, LLMUnavailableError, RateLimitedError
 from app.llm.usage import Usage
 from app.multimodal.stt import transcribe
 from app.multimodal.vision import IMAGE_TYPES, extract_error
-from app.observability.request_log import logged, save_feedback
+from app.observability.request_log import log_agent_result, log_request, logged, save_feedback
 from app.schemas.ask import AskRequest, AskResponse
 from app.services import get_agent_runner, get_rag_pipeline
 
@@ -76,7 +76,7 @@ def ask_stream(question: str, history: list, role: str, session_id: str):
                 yield history, "", _details(data), data.request_id
     except Exception as e:
         history[-1]["content"] = _error_text(e)
-        yield history, "", "", gr.skip()
+        yield history, "", "", None  # nothing to rate: don't let 👍/👎 attach to the previous answer
 
 
 def send_feedback(rating: str, comment: str, request_id: str | None, session_id: str):
@@ -91,11 +91,14 @@ def agent_send(message: str, history: list, employee_id: str, session_id: str):
     if not message.strip():
         return history, "", None, gr.update(visible=False), ""
     history = history + [{"role": "user", "content": message}]
+    role = ROLE_OF[employee_id]
     try:
-        out = get_agent_runner().run(message, session_id, ROLE_OF[employee_id], employee_id)
+        out = get_agent_runner().run(message, session_id, role, employee_id)
     except Exception as e:
+        log_request("/ui/agent", session_id=session_id, role=role, error=type(e).__name__)
         history.append({"role": "assistant", "content": _error_text(e)})
         return history, "", None, gr.update(visible=False), ""
+    log_agent_result("/ui/agent", out, session_id, role)
     history.append({"role": "assistant", "content": out["reply"]})
     pending = out["pending_action"]
     route = out["route"]

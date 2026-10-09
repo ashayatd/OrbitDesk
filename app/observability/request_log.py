@@ -54,6 +54,12 @@ def log_request(
         log.exception("request_log_failed")
 
 
+def _refused(res) -> bool:
+    """A guardrail refusal (blocked input or output) is not a knowledge gap: keep it out of 'unanswered'."""
+    g = res.guardrails or {}
+    return g.get("input_check", {}).get("label", "safe") != "safe" or "output_blocked" in g
+
+
 def log_ask_result(endpoint: str, res, session_id: str, role: str) -> None:
     log_request(
         endpoint,
@@ -61,13 +67,31 @@ def log_ask_result(endpoint: str, res, session_id: str, role: str) -> None:
         session_id=session_id,
         role=role,
         question=res.question,
-        answered=res.found,
+        answered=None if _refused(res) else res.found,
         cache_hit=res.cache,
         latency_ms=res.timings_ms.get("total"),
         timings=res.timings_ms,
         tokens_in=res.tokens.input_tokens,
         tokens_out=res.tokens.output_tokens,
         cost_usd=res.tokens.cost_usd,
+    )
+
+
+def log_agent_result(endpoint: str, out: dict, session_id: str, role: str) -> None:
+    stopped = out.get("stopped") or ""
+    refused = out.get("guardrails", {}).get("input_check", {}).get("label", "safe") != "safe"
+    log_request(
+        endpoint,
+        request_id=out.get("request_id"),
+        session_id=session_id,
+        role=role,
+        question=out.get("question"),  # PII-masked by the runner
+        answered=None if refused else not stopped,
+        latency_ms=out["timings_ms"]["total"],
+        tokens_in=out["tokens"]["input_tokens"],
+        tokens_out=out["tokens"]["output_tokens"],
+        cost_usd=out["tokens"]["cost_usd"],
+        error=stopped if stopped.startswith("error") else None,
     )
 
 

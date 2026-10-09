@@ -16,7 +16,8 @@ _DISCLAIMER = "Fictional document created for the OrbitDesk demo"
 def parse_file(path: Path) -> list[Section]:
     suffix = path.suffix.lower()
     if suffix in (".md", ".markdown", ".txt"):
-        return parse_markdown(path.read_text(encoding="utf-8"))
+        # utf-8-sig drops a byte-order mark; with it, "# Title" on line 1 would not be seen as a heading
+        return parse_markdown(path.read_text(encoding="utf-8-sig"))
     if suffix == ".pdf":
         return parse_pdf(path)
     raise ValueError(f"unsupported file type: {suffix}")

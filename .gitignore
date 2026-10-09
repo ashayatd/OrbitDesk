@@ -16,7 +16,7 @@ data/chroma/
 data/faiss/
 data/uploads/
 data/*.db
-data/*.db-journal
+data/*.db-*
 *.sqlite3
 
 # Experiments / caches

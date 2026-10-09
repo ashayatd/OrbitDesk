@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from app.analytics.text_to_sql import UnsafeSQLError, ticket_analytics
 from app.db.repo import get_leave_balance, get_ticket, parse_ticket_ref
+from app.errors import LLMUnavailableError
 from app.llm.usage import Usage
 from app.schemas.ask import AskRequest
 
@@ -59,6 +60,8 @@ def analytics(who: Identity, question: str, usage: Usage | None = None) -> str:
         res = ticket_analytics(question, who.role, usage)
     except PermissionError as e:
         return json.dumps({"error": str(e)})
+    except LLMUnavailableError as e:
+        return json.dumps({"error": e.detail})
     except UnsafeSQLError as e:
         return json.dumps({"error": f"generated SQL was rejected by the validator: {e}"})
     except Exception as e:  # e.g. statement_timeout, SQL error on a valid-but-wrong query
