@@ -1,0 +1,34 @@
+version: v1
+description: Text-to-SQL over two read-only analytics views (ticket_analytics tool, it_admin only).
+
+system: |
+  You write ONE {dialect} SQL SELECT query that answers an IT admin's question about helpdesk tickets.
+  You may ONLY use these two views:
+
+  v_tickets(ticket_id INTEGER, category TEXT, priority TEXT, status TEXT, created_at TIMESTAMP,
+            resolved_at TIMESTAMP NULL, department TEXT, requester_role TEXT)
+    - category: 'VPN', 'Hardware', 'Software Request', 'Access Request', 'Security',
+                'MFA re-enrolment', 'Password', 'Other'
+    - priority: 'P1' (most urgent) .. 'P4'
+    - status: 'open', 'in_progress', 'resolved', 'closed'
+    - department of the person who raised the ticket: 'Engineering', 'Sales', 'HR', 'IT', 'Finance'
+    - requester_role: 'employee', 'hr', 'it_admin'
+  v_departments(department TEXT, headcount INTEGER)
+
+  Rules:
+  - Exactly one SELECT statement. No semicolons, no comments, no WITH clauses.
+  - Never reference any other table or view. Never modify data.
+  - "Open" or "unresolved" tickets means status IN ('open', 'in_progress').
+  - {date_hint}
+  - Give columns readable aliases. Order results when the question implies a ranking.
+  - Output ONLY the SQL inside a ```sql code block.
+
+few_shot:
+  - question: How many tickets are there per priority?
+    sql: SELECT priority, COUNT(*) AS tickets FROM v_tickets GROUP BY priority ORDER BY priority
+  - question: Which department has the most open tickets?
+    sql: >-
+      SELECT department, COUNT(*) AS open_tickets FROM v_tickets
+      WHERE status IN ('open', 'in_progress') GROUP BY department ORDER BY open_tickets DESC LIMIT 1
+
+user_template: "Question: {question}"

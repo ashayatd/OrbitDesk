@@ -73,7 +73,13 @@ class HybridRetriever:
         vector_hits = self.store.query(qvec, cfg.candidate_k, role, department)
         t["vector_search"] = _ms(t0)
 
-        if cfg.use_hybrid:
+        if cfg.use_hybrid and hasattr(self.store, "hybrid_query"):
+            # pgvector: vector + Postgres full-text + RRF fused in one SQL statement. (The plain vector
+            # query above still runs: without rerank, its top cosine score drives the refusal threshold.)
+            t0 = time.perf_counter()
+            candidates = self.store.hybrid_query(qvec, query, cfg.candidate_k, role, department)
+            t["db_hybrid_search"] = _ms(t0)
+        elif cfg.use_hybrid:
             t0 = time.perf_counter()
             bm25_hits = self.bm25.for_role(role, index_version, department).search(query, cfg.candidate_k)
             t["bm25_search"] = _ms(t0)

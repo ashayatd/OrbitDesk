@@ -3,10 +3,13 @@
 Only PII-masked questions are stored (the pipeline masks before anything else sees them).
 """
 
-import json
 import uuid
+from datetime import datetime, timedelta
 
-from app.db.database import db_session, init_db
+from sqlalchemy import case, func, insert, select
+
+from app.db.database import db_session, feedback, init_db, request_log
+from app.db.dialect import upsert
 from app.log import get_logger
 
 log = get_logger(__name__)
@@ -31,26 +34,22 @@ def log_request(
     """Never raises: losing a log row must not fail a user request."""
     try:
         init_db()
+        values = {
+            "endpoint": endpoint,
+            "session_id": session_id,
+            "role": role,
+            "question": (question or "")[:500],
+            "answered": answered,
+            "cache_hit": cache_hit,
+            "latency_ms": latency_ms,
+            "timings": timings or {},
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "cost_usd": cost_usd,
+            "error": error,
+        }
         with db_session() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO request_log (id, endpoint, session_id, role, question, answered, cache_hit,"
-                " latency_ms, timings, tokens_in, tokens_out, cost_usd, error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    request_id or uuid.uuid4().hex,
-                    endpoint,
-                    session_id,
-                    role,
-                    (question or "")[:500],
-                    None if answered is None else int(answered),
-                    cache_hit,
-                    latency_ms,
-                    json.dumps(timings or {}),
-                    tokens_in,
-                    tokens_out,
-                    cost_usd,
-                    error,
-                ),
-            )
+            conn.execute(upsert(conn, request_log, "id", {"id": request_id or uuid.uuid4().hex, **values}, values))
     except Exception:
         log.exception("request_log_failed")
 
@@ -87,66 +86,97 @@ def logged(events, endpoint: str, session_id: str, role: str, question: str = ""
 def save_feedback(request_id: str | None, session_id: str | None, rating: str, comment: str | None) -> int:
     init_db()
     with db_session() as conn:
-        cur = conn.execute(
-            "INSERT INTO feedback (request_id, session_id, rating, comment) VALUES (?,?,?,?)",
-            (request_id, session_id, rating, (comment or "")[:2000]),
-        )
-        return int(cur.lastrowid)
+        return conn.execute(
+            insert(feedback)
+            .values(request_id=request_id, session_id=session_id, rating=rating, comment=(comment or "")[:2000])
+            .returning(feedback.c.id)
+        ).scalar_one()
+
+
+def _r(v, nd=1):
+    return None if v is None else round(float(v), nd)
 
 
 def admin_stats(days: int = 14) -> dict:
-    """Aggregations are done in SQL (GROUP BY), one query per panel, not row-by-row in Python."""
+    """Aggregations are done in the database (GROUP BY), one query per panel, not row by row in Python."""
     init_db()
-    since = f"-{int(days)} days"
+    since = datetime.now() - timedelta(days=int(days))
+    rl = request_log.c
+    errors = func.sum(case((rl.error.is_not(None), 1), else_=0))
+    unanswered = func.sum(case((rl.answered.is_(False), 1), else_=0))
+    in_window = rl.ts >= since
+    day = func.date(rl.ts)
     with db_session() as conn:
         per_day = conn.execute(
-            "SELECT date(ts) AS day, COUNT(*) AS requests,"
-            " SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors,"
-            " SUM(CASE WHEN answered = 0 THEN 1 ELSE 0 END) AS unanswered,"
-            " ROUND(AVG(latency_ms), 1) AS avg_latency_ms"
-            " FROM request_log WHERE ts >= datetime('now', ?) GROUP BY day ORDER BY day",
-            (since,),
-        ).fetchall()
+            select(
+                day.label("day"),
+                func.count().label("requests"),
+                errors.label("errors"),
+                unanswered.label("unanswered"),
+                func.avg(rl.latency_ms).label("avg_latency_ms"),
+            )
+            .where(in_window)
+            .group_by(day)
+            .order_by(day)
+        ).all()
         totals = conn.execute(
-            "SELECT COUNT(*) AS n,"
-            " SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors,"
-            " SUM(CASE WHEN answered = 0 THEN 1 ELSE 0 END) AS unanswered,"
-            " SUM(CASE WHEN cache_hit IN ('exact','semantic') THEN 1 ELSE 0 END) AS cache_hits,"
-            " SUM(CASE WHEN endpoint NOT IN ('/agent') THEN 1 ELSE 0 END) AS cacheable,"  # RAG paths use the cache
-            " ROUND(AVG(latency_ms), 1) AS avg_latency_ms, ROUND(SUM(COALESCE(cost_usd,0)), 6) AS cost_usd"
-            " FROM request_log WHERE ts >= datetime('now', ?)",
-            (since,),
-        ).fetchone()
+            select(
+                func.count().label("n"),
+                errors.label("errors"),
+                unanswered.label("unanswered"),
+                func.sum(case((rl.cache_hit.in_(("exact", "semantic")), 1), else_=0)).label("cache_hits"),
+                func.sum(case((rl.endpoint != "/agent", 1), else_=0)).label("cacheable"),  # RAG paths use the cache
+                func.avg(rl.latency_ms).label("avg_latency_ms"),
+                func.sum(func.coalesce(rl.cost_usd, 0)).label("cost_usd"),
+            ).where(in_window)
+        ).one()
+        q_norm = func.lower(func.trim(rl.question))
         top_unanswered = conn.execute(
-            "SELECT question, COUNT(*) AS times FROM request_log"
-            " WHERE answered = 0 AND error IS NULL AND ts >= datetime('now', ?)"
-            " GROUP BY lower(trim(question)) ORDER BY times DESC LIMIT 10",
-            (since,),
-        ).fetchall()
+            select(func.min(rl.question).label("question"), func.count().label("times"))
+            .where(rl.answered.is_(False), rl.error.is_(None), in_window)
+            .group_by(q_norm)
+            .order_by(func.count().desc())
+            .limit(10)
+        ).all()
         by_endpoint = conn.execute(
-            "SELECT endpoint, COUNT(*) AS n, ROUND(AVG(latency_ms),1) AS avg_latency_ms FROM request_log"
-            " WHERE ts >= datetime('now', ?) GROUP BY endpoint ORDER BY n DESC",
-            (since,),
-        ).fetchall()
+            select(rl.endpoint, func.count().label("n"), func.avg(rl.latency_ms).label("avg_latency_ms"))
+            .where(in_window)
+            .group_by(rl.endpoint)
+            .order_by(func.count().desc())
+        ).all()
         fb = conn.execute(
-            "SELECT rating, COUNT(*) AS n FROM feedback WHERE ts >= datetime('now', ?) GROUP BY rating", (since,)
-        ).fetchall()
+            select(feedback.c.rating, func.count().label("n")).where(feedback.c.ts >= since).group_by(feedback.c.rating)
+        ).all()
         recent_down = conn.execute(
-            "SELECT f.ts, f.comment, r.question FROM feedback f LEFT JOIN request_log r ON r.id = f.request_id"
-            " WHERE f.rating = 'down' ORDER BY f.ts DESC LIMIT 10"
-        ).fetchall()
-    n = totals["n"] or 0
+            select(feedback.c.ts, feedback.c.comment, rl.question)
+            .select_from(feedback.outerjoin(request_log, rl.id == feedback.c.request_id))
+            .where(feedback.c.rating == "down")
+            .order_by(feedback.c.ts.desc())
+            .limit(10)
+        ).all()
+    n = totals.n or 0
     return {
         "window_days": days,
         "requests": n,
-        "failure_rate": round((totals["errors"] or 0) / n, 4) if n else None,
-        "unanswered_rate": round((totals["unanswered"] or 0) / n, 4) if n else None,
-        "avg_latency_ms": totals["avg_latency_ms"],
-        "cache_hit_rate": round((totals["cache_hits"] or 0) / totals["cacheable"], 4) if totals["cacheable"] else None,
-        "est_cost_usd": totals["cost_usd"],
-        "questions_per_day": [dict(r) for r in per_day],
-        "by_endpoint": [dict(r) for r in by_endpoint],
-        "top_unanswered": [dict(r) for r in top_unanswered],
-        "feedback": {r["rating"]: r["n"] for r in fb},
-        "recent_thumbs_down": [dict(r) for r in recent_down],
+        "failure_rate": round((totals.errors or 0) / n, 4) if n else None,
+        "unanswered_rate": round((totals.unanswered or 0) / n, 4) if n else None,
+        "avg_latency_ms": _r(totals.avg_latency_ms),
+        "cache_hit_rate": round((totals.cache_hits or 0) / totals.cacheable, 4) if totals.cacheable else None,
+        "est_cost_usd": _r(totals.cost_usd, 6),
+        "questions_per_day": [
+            {
+                "day": str(r.day),
+                "requests": r.requests,
+                "errors": r.errors,
+                "unanswered": r.unanswered,
+                "avg_latency_ms": _r(r.avg_latency_ms),
+            }
+            for r in per_day
+        ],
+        "by_endpoint": [
+            {"endpoint": r.endpoint, "n": r.n, "avg_latency_ms": _r(r.avg_latency_ms)} for r in by_endpoint
+        ],
+        "top_unanswered": [{"question": r.question, "times": r.times} for r in top_unanswered],
+        "feedback": {r.rating: r.n for r in fb},
+        "recent_thumbs_down": [{"ts": str(r.ts), "comment": r.comment, "question": r.question} for r in recent_down],
     }

@@ -5,7 +5,6 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.agent.actions import ConfirmError, confirm_action
 from app.deps import rate_limit, require_llm
-from app.infra.redis_client import get_redis
 from app.observability.request_log import log_request
 from app.schemas.agent import AgentRequest, AgentResponse, ConfirmRequest
 from app.services import get_agent_runner
@@ -48,6 +47,6 @@ async def agent(req: AgentRequest, _=Depends(require_llm)) -> AgentResponse:
 def confirm(req: ConfirmRequest) -> dict:
     """Executes a pending action. Needs no LLM: it's a plain, idempotent DB write."""
     try:
-        return confirm_action(get_redis(), req.confirmation_id, req.employee_id, req.idempotency_key)
+        return confirm_action(req.confirmation_id, req.employee_id, req.idempotency_key)
     except ConfirmError as e:
         raise HTTPException(e.status, e.detail) from e

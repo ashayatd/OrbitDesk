@@ -38,6 +38,14 @@ dependencies = [
     "tenacity>=8.5",
     # Observability
     "langfuse>=2.50",
+    # Database (Phase 8b): SQLAlchemy Core works with SQLite and Postgres
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+    "sqlglot>=25",  # parses LLM-written SQL for the text-to-SQL validator
+    # MCP (Phase 8b)
+    "mcp>=1.20",
+    "langchain-mcp-adapters>=0.1",
 ]
 
 [dependency-groups]
@@ -48,7 +56,11 @@ dev = [
     "ruff>=0.6",
     "reportlab>=4.2",
 ]
+llamaindex = [
+    "llama-index-core>=0.12",
+]
 eval = [
+    "llama-index-core>=0.12",
     "ragas>=0.4.3",
     "datasets>=2.20",
     "mlflow-skinny>=3.0",
@@ -96,6 +108,7 @@ asyncio_mode = "auto"
 markers = [
     "needs_llm: requires GROQ_API_KEY (skipped otherwise)",
     "slow: loads local ML models",
+    "postgres: needs TEST_DATABASE_URL (a Postgres with pgvector); skipped otherwise",
 ]
 
 [tool.ruff.lint.per-file-ignores]

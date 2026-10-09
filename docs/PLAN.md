@@ -210,3 +210,18 @@ Roles are stored as boolean flags because Chroma's `where` filter works on scala
   empty stand-in for it (we never use VertexAI).
 - **Chunk-size grid values:** 100 vs 300 tokens (not 300 vs 500): most sections are under 150 tokens, so
   300 and 500 produce identical chunks.
+
+## 10. Phase 8b: Postgres, text-to-SQL, MCP, LlamaIndex (added 2026-10-09, second target JD)
+
+Ordering: Phases 9 and 10 were already committed when 8b was requested. 8b is built now in its own
+commits, and the Phase 9 artifacts (compose, Dockerfile, CI) and Phase 10 docs are updated in the same
+phase, so the shipped version includes 8b.
+
+| Part | Scope | Done when |
+|---|---|---|
+| A. Postgres as main DB | SQLAlchemy Core + psycopg; `DATABASE_URL` (empty -> SQLite + Chroma, logged); employees, leave_balances, tickets, **pending_actions** (moved from Redis), documents, request_log, feedback with constraints + indexes; idempotency = UNIQUE key + `INSERT ... ON CONFLICT`; postgres (pgvector image) in compose; Postgres integration tests in CI via a service container; SQLite stays for fast unit tests | 5 simultaneous confirms -> 1 ticket **on Postgres** |
+| A. pgvector store | 3rd `VectorStore`: HNSW (cosine), role filter as SQL `WHERE`, keyword side = Postgres full-text (`tsvector`), hybrid RRF inside one SQL query; added to the eval grid next to Chroma and FAISS | grid rows + leak test on pgvector |
+| B. Text-to-SQL tool | `ticket_analytics(question)`, it_admin only; LLM writes SQL over 2 read-only views; validator (single SELECT, allowlisted views, LIMIT, no comments/semicolons, no dangerous functions); executed in a READ ONLY transaction as a read-only DB role with `statement_timeout`; returns SQL + rows | 10 eval questions with expected results; attack suite (write / drop / other tables) 100% blocked |
+| C. MCP server | Official Python MCP SDK; tools `search_policies`, `get_ticket_status`, `ticket_analytics`; identity from server config (stdio) or a signed bearer token (streamable HTTP), never from tool args; README client config; `TOOLS_VIA_MCP=true` makes the LangGraph agent load those tools through an MCP client adapter | agent tests pass in both modes |
+| D. LlamaIndex path | Same chunks, same local embedding model, same role filter, behind the retriever interface; in the eval grid with recall@5, MRR, latency | grid rows |
+| E. Docs | DECISIONS: LangChain vs LlamaIndex vs LangGraph, Postgres choices; INTERVIEW_MAP: second-JD section (Oracle marked "not used") | numbers checked by `scripts/check_doc_numbers.py` |

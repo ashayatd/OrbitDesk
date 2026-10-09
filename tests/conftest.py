@@ -35,3 +35,27 @@ def _seed_db():
     from app.db.seed import seed
 
     seed()
+
+
+@pytest.fixture
+def pg(monkeypatch):
+    """Point the app at a clean, seeded Postgres (TEST_DATABASE_URL) for one test."""
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("TEST_DATABASE_URL not set")
+    from sqlalchemy import text
+
+    from app.config import get_settings
+    from app.db.database import get_engine, metadata, reset_initialised
+    from app.db.seed import seed
+
+    monkeypatch.setattr(get_settings(), "database_url", url)
+    engine = get_engine(url)
+    with engine.begin() as conn:
+        for view in ("v_tickets", "v_departments"):
+            conn.execute(text(f"DROP VIEW IF EXISTS {view}"))
+    metadata.drop_all(engine)
+    reset_initialised()
+    seed()
+    yield url
+    reset_initialised()

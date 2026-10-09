@@ -55,6 +55,9 @@ class Settings(BaseSettings):
 
     # --- Infra ---
     redis_url: str = "redis://localhost:6379/0"
+    # Postgres main DB, e.g. postgresql+psycopg://orbit:orbit@localhost:5432/orbitdesk (Neon works too).
+    # Empty -> SQLite file + Chroma (logged as a fallback at startup).
+    database_url: str = ""
     chroma_url: str = ""  # e.g. http://chroma:8000 ; empty = embedded on-disk Chroma
     queue_mode: str = "rq"  # rq (worker process) | inline (run job in-process, no worker needed)
     data_dir: Path = ROOT_DIR / "data"
@@ -63,11 +66,16 @@ class Settings(BaseSettings):
     reports_dir: Path = ROOT_DIR / "reports"
     ingest_on_startup: bool = True
     mount_ui: bool = True
+    tools_via_mcp: bool = False  # agent loads search/ticket/analytics tools from the MCP server
+    mcp_url: str = "http://127.0.0.1:8000/mcp/"  # used when TOOLS_VIA_MCP=true
+    mcp_auth_secret: str = "dev-only-change-me"  # HMAC key for MCP bearer tokens (set in production)
+    analytics_statement_timeout_ms: int = 3000
+    analytics_row_limit: int = 100
 
     # --- Retrieval ---
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    vector_backend: str = "chroma"  # chroma | faiss
+    vector_backend: str = "auto"  # auto (pgvector if DATABASE_URL else chroma) | chroma | faiss | pgvector
     chunk_size: int = 300  # tokens (embedding tokenizer); model limit is 512
     chunk_overlap: int = 45
     embed_batch_size: int = 8  # fastest on CPU in reports/embedding_benchmark.json

@@ -14,9 +14,11 @@ from pathlib import Path
 
 import redis
 import yaml
+from sqlalchemy import func, select
 
 from app.cache.index_version import bump_index_version
-from app.db.database import db_session, init_db
+from app.db.database import db_session, documents, init_db
+from app.db.dialect import upsert
 from app.infra.locks import distributed_lock
 from app.ingest.chunker import chunk_document
 from app.ingest.models import DocMeta
@@ -56,8 +58,7 @@ def load_manifest(path: Path) -> list[DocMeta]:
 
 def _registered_hash(doc_id: str, db_path: Path | None) -> str | None:
     with db_session(db_path) as conn:
-        row = conn.execute("SELECT content_hash FROM documents WHERE doc_id = ?", (doc_id,)).fetchone()
-    return row["content_hash"] if row else None
+        return conn.execute(select(documents.c.content_hash).where(documents.c.doc_id == doc_id)).scalar()
 
 
 def ingest_document(
@@ -107,13 +108,12 @@ def ingest_document(
         store.delete(stale)
         t["upsert"] = time.perf_counter() - t0
 
-        with db_session(db_path) as conn:
+        with db_session(db_path) as conn:  # upsert the registry row (INSERT ... ON CONFLICT DO UPDATE)
+            values = {"filename": path.name, "content_hash": h, "version": meta.version, "chunk_count": len(chunks)}
             conn.execute(
-                "INSERT INTO documents (doc_id, filename, content_hash, version, chunk_count)"
-                " VALUES (?,?,?,?,?) ON CONFLICT(doc_id) DO UPDATE SET filename=excluded.filename,"
-                " content_hash=excluded.content_hash, version=excluded.version,"
-                " chunk_count=excluded.chunk_count, indexed_at=datetime('now')",
-                (meta.doc_id, path.name, h, meta.version, len(chunks)),
+                upsert(
+                    conn, documents, "doc_id", {"doc_id": meta.doc_id, **values}, {**values, "indexed_at": func.now()}
+                )
             )
         version = bump_index_version(r)
 

@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from app.db.database import db_session
+from app.db.database import db_session, feedback, request_log
 from app.main import create_app
 from app.observability.request_log import admin_stats, log_request
 from app.observability.tracing import trace_callbacks, traced
@@ -15,8 +15,8 @@ def test_tracing_is_noop_without_keys():
 
 def test_feedback_and_admin_stats():
     with db_session() as conn:
-        conn.execute("DELETE FROM request_log")
-        conn.execute("DELETE FROM feedback")
+        conn.execute(request_log.delete())
+        conn.execute(feedback.delete())
     log_request("/ask", request_id="r1", question="dog in office?", answered=False, latency_ms=100, cache_hit="none")
     log_request("/ask", request_id="r2", question="Dog in office?", answered=False, latency_ms=300, cache_hit="exact")
     log_request("/ask", request_id="r3", question="annual leave", answered=True, latency_ms=200, cache_hit="semantic")

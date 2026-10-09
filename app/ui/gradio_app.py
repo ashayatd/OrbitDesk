@@ -13,7 +13,6 @@ import gradio as gr
 from app.agent.actions import ConfirmError, confirm_action
 from app.db.seed import EMPLOYEES
 from app.errors import InputRejectedError, LLMUnavailableError, RateLimitedError
-from app.infra.redis_client import get_redis
 from app.llm.usage import Usage
 from app.multimodal.stt import transcribe
 from app.multimodal.vision import IMAGE_TYPES, extract_error
@@ -114,9 +113,9 @@ def agent_confirm(pending: dict | None, history: list, employee_id: str):
     if not pending:
         return history, None, gr.update(visible=False)
     try:
-        res = confirm_action(get_redis(), pending["confirmation_id"], employee_id)
+        res = confirm_action(pending["confirmation_id"], employee_id)
         t = res["ticket"]
-        msg = f"✅ Ticket **{t['id']}** {res['status']} ({t['priority']}, {t['category']}): {t['title']}"
+        msg = f"✅ Ticket **{t['ref']}** {res['status']} ({t['priority']}, {t['category']}): {t['title']}"
     except ConfirmError as e:
         msg = f"⚠️ {e.detail}"
     return history + [{"role": "assistant", "content": msg}], None, gr.update(visible=False)

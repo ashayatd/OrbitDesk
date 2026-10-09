@@ -1,22 +1,26 @@
 """Agent tools, built per request as closures over a trusted AgentContext.
 
-Security property: identity (employee_id, role) is captured from the request
-context when the tools are built. It is NOT a tool argument, so the model can't
-read someone else's leave balance even if a prompt injection tells it to.
+Security property: identity (employee_id, role) is captured from the request context when the
+tools are built. It is NOT a tool argument, so the model can't read someone else's leave balance
+even if a prompt injection tells it to.
+
+TOOLS_VIA_MCP=true: search_policies, get_ticket_status and ticket_analytics are loaded from the
+MCP server instead (app/agent/mcp_tools.py); the identity then travels as a signed bearer token.
+get_leave_balance and create_ticket always stay in-process (create_ticket is part of the
+confirm-before-write flow).
 """
 
-import re
+import json
 from dataclasses import dataclass, field
 from typing import Literal
 
-from langchain_core.tools import StructuredTool
+from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
+from app.agent import core_tools
 from app.agent.actions import TICKET_CATEGORIES, PendingAction, propose_ticket
-from app.db.repo import get_leave_balance, get_ticket
-from app.infra.redis_client import get_redis
+from app.config import get_settings
 from app.llm.usage import Usage
-from app.schemas.ask import AskRequest
 
 
 @dataclass
@@ -28,6 +32,10 @@ class AgentContext:
     pending: list[PendingAction] = field(default_factory=list)
     citations: list[dict] = field(default_factory=list)
     tool_log: list[dict] = field(default_factory=list)
+
+    @property
+    def identity(self) -> core_tools.Identity:
+        return core_tools.Identity(self.employee_id, self.role, self.session_id)
 
 
 class NoArgs(BaseModel):
@@ -51,30 +59,31 @@ class TicketStatusArgs(BaseModel):
     ticket_id: str = Field(description="Ticket id like TCK-1002")
 
 
-def build_tools(ctx: AgentContext, rag_pipeline) -> list[StructuredTool]:
-    def search_policies(question: str) -> str:
-        """Search Orbit Systems HR policies and IT runbooks; returns a cited answer."""
-        events = rag_pipeline.run(  # request id = the agent's trace id, so one trace per agent turn
-            AskRequest(question=question, session_id=ctx.session_id, role=ctx.role, stream=False),
-            ctx.usage.trace_id,
-            use_memory=False,
-        )
-        res = [d for n, d in events if n == "result"][0]
-        ctx.usage.merge(usage_from_response(res))
-        ctx.citations += [c.model_dump() for c in res.citations]
-        return res.answer
+class AnalyticsArgs(BaseModel):
+    question: str = Field(description="Question about ticket statistics, e.g. 'open P1 tickets by department'")
 
-    def get_my_leave_balance() -> str:
-        """Get the current user's remaining leave days (annual, sick, carry-over)."""
-        bal = get_leave_balance(ctx.employee_id)  # identity from context, never from the model
-        if not bal:
-            return "No leave records found for this employee."
-        return "; ".join(f"{t}: {v['remaining']:g} of {v['entitled']:g} days remaining" for t, v in bal.items())
+
+SEARCH_DOC = "Search Orbit Systems HR policies and IT runbooks; returns a cited answer."
+STATUS_DOC = "Get the status of one of the current user's IT tickets."
+ANALYTICS_DOC = (
+    "IT admins only: answer statistics questions about helpdesk tickets (counts, trends, breakdowns by "
+    "category/priority/status/department). Returns the SQL that ran and the result rows."
+)
+
+
+def build_tools(ctx: AgentContext, rag_pipeline) -> list[BaseTool]:
+    def search_policies(question: str) -> str:
+        out = core_tools.search_policies(rag_pipeline, ctx.identity, question, ctx.usage.trace_id)
+        for c in out["usage_calls"]:
+            ctx.usage.add(f"search_policies/{c['stage']}", c["model"], c["in"], c["out"])
+        ctx.citations += out["citations"]
+        return out["answer"]
+
+    def get_leave_balance() -> str:
+        return core_tools.leave_balance(ctx.identity)  # identity from context, never from the model
 
     def create_ticket(title: str, description: str, category: str, priority: str) -> str:
-        """Propose an IT ticket. It is NOT created until the user confirms it in the UI."""
         action = propose_ticket(
-            get_redis(),
             ctx.employee_id,
             ctx.session_id,
             {"title": title, "description": description, "category": category, "priority": priority},
@@ -86,49 +95,38 @@ def build_tools(ctx: AgentContext, rag_pipeline) -> list[StructuredTool]:
         )
 
     def get_ticket_status(ticket_id: str) -> str:
-        """Get the status of one of the current user's IT tickets."""
-        if not re.fullmatch(r"(?i)TCK-\d{4,6}", ticket_id.strip()):
-            return "Invalid ticket id format; expected something like TCK-1002."
-        t = get_ticket(ticket_id.strip())
-        # it_admin may see any ticket; everyone else only their own (same message: don't leak existence)
-        if not t or (ctx.role != "it_admin" and t["employee_id"] != ctx.employee_id):
-            return f"No ticket {ticket_id.upper()} found for you."
-        return f"{t['id']}: '{t['title']}' status={t['status']} priority={t['priority']} created={t['created_at']}"
+        return core_tools.ticket_status(ctx.identity, ticket_id)
 
-    def logged(fn):
+    def ticket_analytics(question: str) -> str:
+        return core_tools.analytics(ctx.identity, question, ctx.usage)
+
+    def logged(name: str, fn):
         def wrapper(**kwargs):
             out = fn(**kwargs)
-            ctx.tool_log.append({"tool": fn.__name__, "args": kwargs, "result": out[:300]})
+            ctx.tool_log.append({"tool": name, "args": kwargs, "result": str(out)[:300]})
             return out
 
         return wrapper
 
-    return [
-        StructuredTool.from_function(
-            logged(search_policies),
-            name="search_policies",
-            description=search_policies.__doc__,
-            args_schema=SearchArgs,
-        ),
-        StructuredTool.from_function(
-            logged(get_my_leave_balance),
-            name="get_leave_balance",
-            description=get_my_leave_balance.__doc__,
-            args_schema=NoArgs,
-        ),
-        StructuredTool.from_function(
-            logged(create_ticket),
-            name="create_ticket",
-            description=create_ticket.__doc__,
-            args_schema=TicketArgs,
-        ),
-        StructuredTool.from_function(
-            logged(get_ticket_status),
-            name="get_ticket_status",
-            description=get_ticket_status.__doc__,
-            args_schema=TicketStatusArgs,
-        ),
+    def tool(name, fn, doc, schema):
+        return StructuredTool.from_function(logged(name, fn), name=name, description=doc, args_schema=schema)
+
+    local = [
+        tool("get_leave_balance", get_leave_balance, "Get the current user's remaining leave days.", NoArgs),
+        tool("create_ticket", create_ticket, "Propose an IT ticket. Not created until the user confirms.", TicketArgs),
     ]
+    if get_settings().tools_via_mcp:
+        from app.agent.mcp_tools import load_mcp_tools
+
+        remote = load_mcp_tools(ctx, logged)
+    else:
+        remote = [
+            tool("search_policies", search_policies, SEARCH_DOC, SearchArgs),
+            tool("get_ticket_status", get_ticket_status, STATUS_DOC, TicketStatusArgs),
+        ]
+        if ctx.role == "it_admin":  # other roles never even see the tool
+            remote.append(tool("ticket_analytics", ticket_analytics, ANALYTICS_DOC, AnalyticsArgs))
+    return remote + local
 
 
 def usage_from_response(res) -> Usage:
@@ -136,3 +134,12 @@ def usage_from_response(res) -> Usage:
     for c in res.tokens.calls:
         u.add(f"search_policies/{c['stage']}", c["model"], c["in"], c["out"])
     return u
+
+
+def citations_from_mcp(text: str) -> tuple[str, list[dict]]:
+    """MCP search_policies returns JSON {answer, citations}; the model sees only the answer."""
+    try:
+        data = json.loads(text)
+        return data.get("answer", text), data.get("citations", [])
+    except (json.JSONDecodeError, AttributeError):
+        return text, []

@@ -56,26 +56,24 @@ def runner(intent: str) -> AgentRunner:
 
 
 def test_double_confirm_creates_one_ticket():
-    r = get_redis()
     before = count_tickets()
-    action = propose_ticket(r, "E1001", "s", TICKET)
-    first = confirm_action(r, action.confirmation_id, "E1001")
-    second = confirm_action(r, action.confirmation_id, "E1001")  # double click / retry
+    action = propose_ticket("E1001", "s", TICKET)
+    first = confirm_action(action.confirmation_id, "E1001")
+    second = confirm_action(action.confirmation_id, "E1001")  # double click / retry
     assert first["status"] == "created" and second["status"] == "duplicate"
     assert first["ticket"]["id"] == second["ticket"]["id"]
     assert count_tickets() == before + 1
 
 
 def test_concurrent_confirms_create_one_ticket():
-    r = get_redis()
     before = count_tickets()
-    action = propose_ticket(r, "E1001", "s", TICKET)
+    action = propose_ticket("E1001", "s", TICKET)
     results, barrier = [], threading.Barrier(5)
 
     def click():
         barrier.wait()
         try:
-            results.append(confirm_action(r, action.confirmation_id, "E1001")["status"])
+            results.append(confirm_action(action.confirmation_id, "E1001")["status"])
         except ConfirmError as e:
             results.append(e.status)
 
@@ -89,13 +87,12 @@ def test_concurrent_confirms_create_one_ticket():
 
 
 def test_confirm_rejects_other_employee_and_unknown_id():
-    r = get_redis()
-    action = propose_ticket(r, "E1001", "s", TICKET)
+    action = propose_ticket("E1001", "s", TICKET)
     with pytest.raises(ConfirmError) as e:
-        confirm_action(r, action.confirmation_id, "E1002")
+        confirm_action(action.confirmation_id, "E1002")
     assert e.value.status == 403
     with pytest.raises(ConfirmError) as e:
-        confirm_action(r, "does-not-exist", "E1001")
+        confirm_action("does-not-exist", "E1001")
     assert e.value.status == 404
 
 
@@ -127,7 +124,7 @@ def test_agent_proposes_ticket_without_creating_it(monkeypatch):
     assert out["pending_action"]["kind"] == "create_ticket"
     assert out["steps"] == 2 and [t["tool"] for t in out["tool_calls"]] == ["create_ticket"]
     assert count_tickets() == before  # nothing written until /agent/confirm
-    assert confirm_action(get_redis(), out["pending_action"]["confirmation_id"], "E1001")["status"] == "created"
+    assert confirm_action(out["pending_action"]["confirmation_id"], "E1001")["status"] == "created"
 
 
 def test_agent_step_limit(monkeypatch):
@@ -180,7 +177,7 @@ def test_agent_endpoints_without_key():
     client = TestClient(create_app())
     r = client.post("/agent", json={"message": "hi", "session_id": "x", "employee_id": "E1001"})
     assert r.status_code == 503
-    action = propose_ticket(get_redis(), "E1001", "x", TICKET)
+    action = propose_ticket("E1001", "x", TICKET)
     ok = client.post("/agent/confirm", json={"confirmation_id": action.confirmation_id, "employee_id": "E1001"})
     assert ok.status_code == 200 and ok.json()["status"] == "created"
     again = client.post("/agent/confirm", json={"confirmation_id": action.confirmation_id, "employee_id": "E1001"})

