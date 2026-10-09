@@ -1,0 +1,82 @@
+[
+  {
+    "factor": "rerank",
+    "level": false,
+    "recall_at_k": 0.973,
+    "mrr": 0.932,
+    "no_answer_accuracy": 0.85,
+    "latency_p50_ms": 17
+  },
+  {
+    "factor": "rerank",
+    "level": true,
+    "recall_at_k": 0.973,
+    "mrr": 0.961,
+    "no_answer_accuracy": 0.95,
+    "latency_p50_ms": 161
+  },
+  {
+    "factor": "hybrid",
+    "level": false,
+    "recall_at_k": 0.975,
+    "mrr": 0.946,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 89
+  },
+  {
+    "factor": "hybrid",
+    "level": true,
+    "recall_at_k": 0.972,
+    "mrr": 0.948,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 89
+  },
+  {
+    "factor": "chunk_size",
+    "level": 100,
+    "recall_at_k": 0.975,
+    "mrr": 0.952,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 82
+  },
+  {
+    "factor": "chunk_size",
+    "level": 300,
+    "recall_at_k": 0.972,
+    "mrr": 0.942,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 96
+  },
+  {
+    "factor": "top_k",
+    "level": 3,
+    "recall_at_k": 0.951,
+    "mrr": 0.944,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 89
+  },
+  {
+    "factor": "top_k",
+    "level": 5,
+    "recall_at_k": 0.996,
+    "mrr": 0.949,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 89
+  },
+  {
+    "factor": "store",
+    "level": "chroma",
+    "recall_at_k": 0.973,
+    "mrr": 0.947,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 80
+  },
+  {
+    "factor": "store",
+    "level": "faiss",
+    "recall_at_k": 0.973,
+    "mrr": 0.947,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 98
+  }
+]

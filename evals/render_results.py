@@ -118,6 +118,23 @@ def main() -> None:
     w("\n**Effect of each factor** (mean over the 16 configs at each level):\n")
     w("| Factor | Level | recall@k | MRR | no-answer acc. | p50 ms |\n|---|---|---|---|---|---|")
     effects = factor_effects(grid)
+    (REPORTS / "grid_factor_effects.json").write_text(
+        json.dumps(
+            [
+                {
+                    "factor": f,
+                    "level": lv,
+                    "recall_at_k": round(rc, 3),
+                    "mrr": round(mrr, 3),
+                    "no_answer_accuracy": round(na, 3),
+                    "latency_p50_ms": round(lat),
+                }
+                for f, lv, rc, mrr, na, lat in effects
+            ],
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     for f, lv, rc, mrr, na, lat in effects:
         w(f"| {f} | {lv} | {rc:.3f} | {mrr:.3f} | {na:.3f} | {lat:.0f} |")
     eff = {(f, str(lv)): (rc, mrr, na, lat) for f, lv, rc, mrr, na, lat in effects}
