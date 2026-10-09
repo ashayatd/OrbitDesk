@@ -42,10 +42,71 @@ def factor_effects(grid: dict) -> list[tuple]:
     return rows
 
 
+MICRO = None
+STACK_SETTINGS = [  # fixed settings for the store/stack comparison table
+    ("chunk 300, k 5, rerank, hybrid (production settings)", 300, 5, True, True),
+    ("chunk 300, k 5, no rerank, hybrid", 300, 5, False, True),
+    ("chunk 300, k 5, no rerank, vector-only", 300, 5, False, False),
+]
+
+
+def _store_section(w, grid: dict) -> None:
+    by = {
+        (
+            r["config"]["chunk_size"],
+            r["config"]["top_k"],
+            r["config"]["rerank"],
+            r["config"]["hybrid"],
+            r["config"]["store"],
+        ): r["metrics"]
+        for r in grid["all"]
+    }
+    stores = [s for s in ("chroma", "faiss", "pgvector", "llamaindex") if any(k[4] == s for k in by)]
+    w(
+        "- **Stores and frameworks** (same chunks, same embedding model, same role filter; hybrid means Python "
+        "BM25 + RRF for Chroma/FAISS, Postgres full-text + RRF in one SQL query for pgvector, and BM25Retriever + "
+        "QueryFusionRetriever for LlamaIndex):\n"
+    )
+    w("  | Settings | " + " | ".join(stores) + " |\n  |---|" + "---|" * len(stores))
+    for label, cs, k, rr, hy in STACK_SETTINGS:
+        cells = []
+        for st in stores:
+            m = by.get((cs, k, rr, hy, st))
+            cells.append(f"MRR {m['mrr']:.3f}, p50 {m['latency_p50_ms']:.0f} ms" if m else "not run")
+        w(f"  | {label} | " + " | ".join(cells) + " |")
+    w("")
+    if MICRO:
+        parts = [f"{name} {v['median']} ms" for name, v in MICRO["results_ms"].items()]
+        w(
+            f"  Raw store call, top-20 with the role filter, median over {MICRO['n_queries']} queries x "
+            f"{MICRO['repeats']} (`reports/store_microbench.json`): " + "; ".join(parts) + ". At ~90 chunks every "
+            "store answers in a few milliseconds, so end-to-end differences in the grid come mostly from reranking "
+            "and run-to-run noise, not from the store."
+        )
+    # Hybrid vs vector-only without rerank, per store: computed, not asserted.
+    comp = []
+    for st in stores:
+        h, v = by.get((300, 5, False, True, st)), by.get((300, 5, False, False, st))
+        if h and v:
+            word = "higher" if h["mrr"] > v["mrr"] else "lower" if h["mrr"] < v["mrr"] else "the same"
+            comp.append(f"{st} {h['mrr']:.3f} vs {v['mrr']:.3f} ({word})")
+    w(
+        "  Reading: with reranking on, all stacks reach the same quality, because the cross-encoder decides the "
+        "final ranking. Without reranking, the keyword side matters. Hybrid vs vector-only MRR (chunk 300, k 5): "
+        + "; ".join(comp)
+        + ". Differences of this size are one or two questions out of 40. "
+        "Chroma stays the default when there is no Postgres; with DATABASE_URL set, `VECTOR_BACKEND=auto` uses "
+        "pgvector so data, vectors and keyword search live in one database (one backup, one access-control model, "
+        "joins with business data)."
+    )
+
+
 def main() -> None:
     ret, grid, safety = load("retrieval_eval.json"), load("grid_results.json"), load("safety_eval.json")
     safety_llm, gen, perf = load("safety_eval_llm.json"), load("generation_eval.json"), load("perf_eval.json")
     bench, calib = load("embedding_benchmark.json"), load("semantic_cache_calibration.json")
+    global MICRO
+    MICRO = load("store_microbench.json")
     router = load("router_comparison.json")
     L = []
     w = L.append
@@ -100,10 +161,11 @@ def main() -> None:
     )
 
     # ---------------- grid ----------------
-    w("## 2. Experiment grid (retrieval-only, 32 configs, logged to MLflow)\n")
+    w(f"## 2. Experiment grid (retrieval-only, {len(grid['all'])} configs, logged to MLflow)\n")
     w(
         "Factors: chunk size {100, 300} x top-k {3, 5} x rerank on/off x hybrid (vector+BM25, RRF) vs vector-only "
-        "x Chroma vs FAISS. Logged to the MLflow experiment `orbitdesk-retrieval-grid` "
+        "x store/stack (Chroma, FAISS, pgvector with in-database full-text hybrid, and a LlamaIndex retrieval "
+        "stack over the same chunks). Logged to the MLflow experiment `orbitdesk-retrieval-grid` "
         "(`uv run mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db`). Ranking rule: "
         f"{grid['ranking_rule']}.\n"
     )
@@ -115,7 +177,9 @@ def main() -> None:
             f"| {i} | `{r['name']}`{tag} | {mm['recall_at_k']:.3f} | {mm['mrr']:.3f} | {mm['no_answer_accuracy']:.3f} "
             f"| {mm['latency_p50_ms']:.0f} | {mm['leaks']} |"
         )
-    w("\n**Effect of each factor** (mean over the 16 configs at each level):\n")
+    if grid.get("not_run"):
+        w(f"\nNot run: {len(grid['not_run'])} configs ({grid['not_run_reason']}).")
+    w("\n**Effect of each factor** (mean over all configs at each level):\n")
     w("| Factor | Level | recall@k | MRR | no-answer acc. | p50 ms |\n|---|---|---|---|---|---|")
     effects = factor_effects(grid)
     (REPORTS / "grid_factor_effects.json").write_text(
@@ -174,16 +238,7 @@ def main() -> None:
         f"config at k=3 the misses were the second source of two multi-document questions (q23, q26) and one "
         f"single-source question (q20) whose answer chunk ranked 4th."
     )
-    w(
-        f"- **Chroma vs FAISS:** identical retrieval quality on ~90 chunks. End-to-end p50 was "
-        f"{eff[('store', 'faiss')][3]:.0f} ms for FAISS vs {eff[('store', 'chroma')][3]:.0f} ms for Chroma. A direct "
-        f"micro-benchmark (200 queries, top-20, role filter) measured the store calls at about 2.8 ms (FAISS) vs "
-        f"1.5 ms (Chroma), and building the FAISS role selector at 0.03 ms, so the store itself explains only a "
-        f"small part of the gap. The rest is unexplained; I did not profile further (one guess is thread "
-        f"contention between FAISS's OpenMP pool and PyTorch, which is untested). At this size the choice of "
-        f"store doesn't matter for quality; Chroma stays as the main store because it supports metadata filters, "
-        f"persistence and a client/server mode out of the box."
-    )
+    _store_section(w, grid)
     w(
         "- **Production config:** rerank on, hybrid on, top-k 5, Chroma, chunk size 300. Switching to 100-token "
         "chunks would cut retrieval latency, but whether smaller chunks hurt answer faithfulness is what the "

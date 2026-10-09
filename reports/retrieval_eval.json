@@ -14,8 +14,8 @@
     "refusal_rate_on_unanswerable": 1.0,
     "false_refusal_rate_on_answerable": 0.0606,
     "leaks": 0,
-    "latency_p50_ms": 167.1,
-    "latency_p95_ms": 210.9,
+    "latency_p50_ms": 151.1,
+    "latency_p95_ms": 190.5,
     "n_questions": 40
   },
   "per_type": {
@@ -26,8 +26,8 @@
       "refusal_rate_on_unanswerable": 0.0,
       "false_refusal_rate_on_answerable": 0.0952,
       "leaks": 0,
-      "latency_p50_ms": 176.1,
-      "latency_p95_ms": 214.2,
+      "latency_p50_ms": 151.0,
+      "latency_p95_ms": 182.5,
       "n_questions": 21
     },
     "multi_doc": {
@@ -37,8 +37,8 @@
       "refusal_rate_on_unanswerable": 0.0,
       "false_refusal_rate_on_answerable": 0.0,
       "leaks": 0,
-      "latency_p50_ms": 169.2,
-      "latency_p95_ms": 205.2,
+      "latency_p50_ms": 173.4,
+      "latency_p95_ms": 196.0,
       "n_questions": 5
     },
     "follow_up": {
@@ -48,8 +48,8 @@
       "refusal_rate_on_unanswerable": 0.0,
       "false_refusal_rate_on_answerable": 0.0,
       "leaks": 0,
-      "latency_p50_ms": 140.1,
-      "latency_p95_ms": 157.1,
+      "latency_p50_ms": 148.6,
+      "latency_p95_ms": 169.7,
       "n_questions": 5
     },
     "unanswerable": {
@@ -62,8 +62,8 @@
       "refusal_rate_on_unanswerable": 1.0,
       "false_refusal_rate_on_answerable": 0.0,
       "leaks": 0,
-      "latency_p50_ms": 163.8,
-      "latency_p95_ms": 187.3,
+      "latency_p50_ms": 172.3,
+      "latency_p95_ms": 189.2,
       "n_questions": 4
     }
   },
@@ -71,6 +71,20 @@
     "queries": 198,
     "leaks": 0,
     "examples": []
+  },
+  "leak_test_by_backend": {
+    "chroma": {
+      "queries": 198,
+      "leaks": 0
+    },
+    "llamaindex": {
+      "queries": 198,
+      "leaks": 0
+    },
+    "pgvector": {
+      "queries": 198,
+      "leaks": 0
+    }
   },
   "threshold_sweep": [
     {
@@ -115,11 +129,11 @@
     }
   ],
   "stage_latency_ms_median": {
-    "embed_query": 11.02,
-    "vector_search": 2.79,
-    "bm25_search": 0.23,
+    "embed_query": 10.61,
+    "vector_search": 3.11,
+    "bm25_search": 0.24,
     "fusion": 0.03,
-    "rerank": 151.78
+    "rerank": 137.38
   },
   "misses": [
     {

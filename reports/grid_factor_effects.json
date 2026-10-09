@@ -2,10 +2,10 @@
   {
     "factor": "rerank",
     "level": false,
-    "recall_at_k": 0.973,
-    "mrr": 0.932,
+    "recall_at_k": 0.972,
+    "mrr": 0.925,
     "no_answer_accuracy": 0.85,
-    "latency_p50_ms": 17
+    "latency_p50_ms": 20
   },
   {
     "factor": "rerank",
@@ -13,7 +13,7 @@
     "recall_at_k": 0.973,
     "mrr": 0.961,
     "no_answer_accuracy": 0.95,
-    "latency_p50_ms": 161
+    "latency_p50_ms": 170
   },
   {
     "factor": "hybrid",
@@ -21,47 +21,47 @@
     "recall_at_k": 0.975,
     "mrr": 0.946,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 89
+    "latency_p50_ms": 92
   },
   {
     "factor": "hybrid",
     "level": true,
-    "recall_at_k": 0.972,
-    "mrr": 0.948,
+    "recall_at_k": 0.97,
+    "mrr": 0.941,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 89
+    "latency_p50_ms": 97
   },
   {
     "factor": "chunk_size",
     "level": 100,
-    "recall_at_k": 0.975,
-    "mrr": 0.952,
+    "recall_at_k": 0.974,
+    "mrr": 0.948,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 82
+    "latency_p50_ms": 84
   },
   {
     "factor": "chunk_size",
     "level": 300,
-    "recall_at_k": 0.972,
-    "mrr": 0.942,
+    "recall_at_k": 0.971,
+    "mrr": 0.938,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 96
+    "latency_p50_ms": 106
   },
   {
     "factor": "top_k",
     "level": 3,
-    "recall_at_k": 0.951,
-    "mrr": 0.944,
+    "recall_at_k": 0.949,
+    "mrr": 0.941,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 89
+    "latency_p50_ms": 93
   },
   {
     "factor": "top_k",
     "level": 5,
     "recall_at_k": 0.996,
-    "mrr": 0.949,
+    "mrr": 0.946,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 89
+    "latency_p50_ms": 97
   },
   {
     "factor": "store",
@@ -69,7 +69,7 @@
     "recall_at_k": 0.973,
     "mrr": 0.947,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 80
+    "latency_p50_ms": 83
   },
   {
     "factor": "store",
@@ -77,6 +77,22 @@
     "recall_at_k": 0.973,
     "mrr": 0.947,
     "no_answer_accuracy": 0.9,
-    "latency_p50_ms": 98
+    "latency_p50_ms": 111
+  },
+  {
+    "factor": "store",
+    "level": "llamaindex",
+    "recall_at_k": 0.97,
+    "mrr": 0.94,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 92
+  },
+  {
+    "factor": "store",
+    "level": "pgvector",
+    "recall_at_k": 0.973,
+    "mrr": 0.939,
+    "no_answer_accuracy": 0.9,
+    "latency_p50_ms": 93
   }
 ]

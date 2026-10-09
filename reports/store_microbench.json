@@ -1,0 +1,28 @@
+{
+  "n_queries": 40,
+  "repeats": 5,
+  "k": 20,
+  "role": "employee",
+  "results_ms": {
+    "chroma": {
+      "median": 1.498,
+      "p95": 1.722
+    },
+    "faiss": {
+      "median": 2.894,
+      "p95": 3.295
+    },
+    "pgvector": {
+      "median": 2.202,
+      "p95": 3.032
+    },
+    "pgvector_hybrid_sql": {
+      "median": 2.475,
+      "p95": 3.053
+    },
+    "llamaindex_vector_incl_embedding": {
+      "median": 12.4,
+      "p95": 15.143
+    }
+  }
+}

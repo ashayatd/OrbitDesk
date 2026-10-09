@@ -15,6 +15,7 @@ from common import (
     EVAL_DIR,
     PRODUCTION,
     EvalConfig,
+    eval_database_url,
     load_golden,
     make_retriever,
     retrieval_metrics,
@@ -95,6 +96,14 @@ def main() -> None:
         for t, rs in by_type.items()
     }
     leak = leak_test(cfg)
+    # Same adversarial test on the other stacks: the role filter must hold in every implementation.
+    leak_by_backend = {cfg.store: {k: leak[k] for k in ("queries", "leaks")}}
+    others = [EvalConfig(store="llamaindex")] + ([EvalConfig(store="pgvector")] if eval_database_url() else [])
+    for other in others:
+        r = leak_test(other)
+        leak_by_backend[other.store] = {k: r[k] for k in ("queries", "leaks")}
+    if not eval_database_url():
+        leak_by_backend["pgvector"] = "not run (no EVAL_DATABASE_URL / DATABASE_URL)"
     misses = [
         {
             "id": r["q"]["id"],
@@ -120,12 +129,13 @@ def main() -> None:
         "metrics": metrics,
         "per_type": per_type,
         "leak_test": leak,
+        "leak_test_by_backend": leak_by_backend,
         "threshold_sweep": threshold_sweep(rows),
         "stage_latency_ms_median": {k: round(sorted(v)[len(v) // 2], 2) for k, v in stage_ms.items()},
         "misses": misses,
     }
     write_report("retrieval_eval.json", report)
-    print(json.dumps({"metrics": metrics, "leak_test": {k: leak[k] for k in ("queries", "leaks")}}, indent=2))
+    print(json.dumps({"metrics": metrics, "leak_test_by_backend": leak_by_backend}, indent=2))
 
     if args.gate:
         gate = json.loads((EVAL_DIR / "gate.json").read_text())
@@ -134,8 +144,9 @@ def main() -> None:
             failures.append(f"recall@5 {metrics['recall_at_k']} < {gate['min_recall_at_5']}")
         if metrics["mrr"] < gate["min_mrr"]:
             failures.append(f"MRR {metrics['mrr']} < {gate['min_mrr']}")
-        if leak["leaks"] > gate["max_leaks"] or metrics["leaks"] > gate["max_leaks"]:
-            failures.append(f"access-control leaks: {leak['leaks'] + metrics['leaks']}")
+        backend_leaks = sum(v["leaks"] for v in leak_by_backend.values() if isinstance(v, dict))
+        if backend_leaks > gate["max_leaks"] or metrics["leaks"] > gate["max_leaks"]:
+            failures.append(f"access-control leaks: {backend_leaks + metrics['leaks']}")
         if failures:
             sys.exit("EVAL GATE FAILED: " + "; ".join(failures))
         print("eval gate passed")

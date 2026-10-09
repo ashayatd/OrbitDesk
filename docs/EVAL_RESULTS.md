@@ -17,9 +17,9 @@ Config: `{"chunk_size": 300, "top_k": 5, "rerank": true, "hybrid": true, "store"
 | False refusal rate on answerable questions | 0.061 |
 | Access-control leaks on the golden set | 0 |
 | **Adversarial leak test** (restricted chunk text, headings, first sentences as queries; vector, hybrid, hybrid+rerank; every role) | **0 leaks in 198 queries** |
-| Retrieval latency p50 / p95 | 167.1 ms / 210.9 ms |
+| Retrieval latency p50 / p95 | 151.1 ms / 190.5 ms |
 
-Median stage latency: embed_query 11.02 ms, vector_search 2.79 ms, bm25_search 0.23 ms, fusion 0.03 ms, rerank 151.78 ms.
+Median stage latency: embed_query 10.61 ms, vector_search 3.11 ms, bm25_search 0.24 ms, fusion 0.03 ms, rerank 137.38 ms.
 
 Misses (wrongly refused, or expected source not retrieved):
 
@@ -28,68 +28,111 @@ Misses (wrongly refused, or expected source not retrieved):
 
 **Relevance threshold.** The production threshold is a cross-encoder logit of -4, chosen from a handful of probe questions *before* the golden set existed. On the golden set it gives 0.950 no-answer accuracy; the best value in the sweep is -5 (0.975). I did **not** move the threshold to the sweep's best value: tuning it on the same 40 questions we report on would inflate the score (a one-question gain on a 40-question set is 2.5 points). A held-out set is needed before changing it.
 
-## 2. Experiment grid (retrieval-only, 32 configs, logged to MLflow)
+## 2. Experiment grid (retrieval-only, 64 configs, logged to MLflow)
 
-Factors: chunk size {100, 300} x top-k {3, 5} x rerank on/off x hybrid (vector+BM25, RRF) vs vector-only x Chroma vs FAISS. Logged to the MLflow experiment `orbitdesk-retrieval-grid` (`uv run mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db`). Ranking rule: recall@k desc, MRR desc, no-answer accuracy desc, p50 latency asc.
+Factors: chunk size {100, 300} x top-k {3, 5} x rerank on/off x hybrid (vector+BM25, RRF) vs vector-only x store/stack (Chroma, FAISS, pgvector with in-database full-text hybrid, and a LlamaIndex retrieval stack over the same chunks). Logged to the MLflow experiment `orbitdesk-retrieval-grid` (`uv run mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db`). Ranking rule: recall@k desc, MRR desc, no-answer accuracy desc, p50 latency asc.
 
 | Rank | Config | recall@k | MRR | no-answer acc. | p50 ms | leaks |
 |---|---|---|---|---|---|---|
-| 1 | `cs100-k5-rr-vec-chroma-v1` | 1.000 | 0.965 | 0.950 | 128 | 0 |
-| 2 | `cs100-k5-rr-hyb-chroma-v1` | 1.000 | 0.965 | 0.950 | 132 | 0 |
-| 3 | `cs100-k5-rr-vec-faiss-v1` | 1.000 | 0.965 | 0.950 | 158 | 0 |
-| 4 | `cs100-k5-rr-hyb-faiss-v1` | 1.000 | 0.965 | 0.950 | 163 | 0 |
-| 5 | `cs300-k5-rr-vec-chroma-v1` | 1.000 | 0.962 | 0.950 | 158 | 0 |
-| 6 | `cs300-k5-rr-hyb-chroma-v1` | 1.000 | 0.962 | 0.950 | 170 | 0 |
-| 7 | `cs300-k5-rr-vec-faiss-v1` | 1.000 | 0.962 | 0.950 | 185 | 0 |
-| 8 | `cs300-k5-rr-hyb-faiss-v1` | 1.000 | 0.962 | 0.950 | 196 | 0 |
-| 9 | `cs100-k5-norr-vec-chroma-v1` | 1.000 | 0.940 | 0.850 | 13 | 0 |
-| 10 | `cs100-k5-norr-vec-faiss-v1` | 1.000 | 0.940 | 0.850 | 20 | 0 |
-| 11 | `cs300-k5-norr-vec-chroma-v1` (baseline) | 1.000 | 0.925 | 0.850 | 16 | 0 |
-| 12 | `cs300-k5-norr-vec-faiss-v1` | 1.000 | 0.925 | 0.850 | 20 | 0 |
-| 13 | `cs100-k5-norr-hyb-chroma-v1` | 0.985 | 0.946 | 0.850 | 13 | 0 |
-| 14 | `cs100-k5-norr-hyb-faiss-v1` | 0.985 | 0.946 | 0.850 | 21 | 0 |
-| 15 | `cs300-k5-norr-hyb-chroma-v1` | 0.985 | 0.930 | 0.850 | 14 | 0 |
-| 16 | `cs300-k5-norr-hyb-faiss-v1` | 0.985 | 0.930 | 0.850 | 20 | 0 |
-| 17 | `cs100-k3-rr-hyb-chroma-v1` | 0.955 | 0.965 | 0.950 | 127 | 0 |
-| 18 | `cs100-k3-rr-vec-chroma-v1` | 0.955 | 0.965 | 0.950 | 146 | 0 |
-| 19 | `cs100-k3-rr-hyb-faiss-v1` | 0.955 | 0.965 | 0.950 | 162 | 0 |
-| 20 | `cs100-k3-rr-vec-faiss-v1` | 0.955 | 0.965 | 0.950 | 164 | 0 |
-| 21 | `cs100-k3-norr-hyb-chroma-v1` | 0.955 | 0.939 | 0.850 | 14 | 0 |
-| 22 | `cs100-k3-norr-hyb-faiss-v1` | 0.955 | 0.939 | 0.850 | 20 | 0 |
-| 23 | `cs100-k3-norr-vec-chroma-v1` | 0.955 | 0.934 | 0.850 | 15 | 0 |
-| 24 | `cs100-k3-norr-vec-faiss-v1` | 0.955 | 0.934 | 0.850 | 21 | 0 |
-| 25 | `cs300-k3-norr-hyb-chroma-v1` | 0.955 | 0.924 | 0.850 | 13 | 0 |
-| 26 | `cs300-k3-norr-hyb-faiss-v1` | 0.955 | 0.924 | 0.850 | 21 | 0 |
-| 27 | `cs300-k3-norr-vec-chroma-v1` | 0.955 | 0.919 | 0.850 | 13 | 0 |
-| 28 | `cs300-k3-norr-vec-faiss-v1` | 0.955 | 0.919 | 0.850 | 20 | 0 |
-| 29 | `cs300-k3-rr-vec-chroma-v1` | 0.939 | 0.955 | 0.950 | 157 | 0 |
-| 30 | `cs300-k3-rr-hyb-chroma-v1` | 0.939 | 0.955 | 0.950 | 158 | 0 |
-| 31 | `cs300-k3-rr-hyb-faiss-v1` | 0.939 | 0.955 | 0.950 | 186 | 0 |
-| 32 | `cs300-k3-rr-vec-faiss-v1` | 0.939 | 0.955 | 0.950 | 192 | 0 |
+| 1 | `cs100-k5-rr-vec-chroma-v1` | 1.000 | 0.965 | 0.950 | 132 | 0 |
+| 2 | `cs100-k5-rr-hyb-chroma-v1` | 1.000 | 0.965 | 0.950 | 136 | 0 |
+| 3 | `cs100-k5-rr-hyb-pgvector-v1` | 1.000 | 0.965 | 0.950 | 140 | 0 |
+| 4 | `cs100-k5-rr-hyb-llamaindex-v1` | 1.000 | 0.965 | 0.950 | 143 | 0 |
+| 5 | `cs100-k5-rr-vec-pgvector-v1` | 1.000 | 0.965 | 0.950 | 156 | 0 |
+| 6 | `cs100-k5-rr-vec-llamaindex-v1` | 1.000 | 0.965 | 0.950 | 159 | 0 |
+| 7 | `cs100-k5-rr-hyb-faiss-v1` | 1.000 | 0.965 | 0.950 | 173 | 0 |
+| 8 | `cs100-k5-rr-vec-faiss-v1` | 1.000 | 0.965 | 0.950 | 180 | 0 |
+| 9 | `cs300-k5-rr-vec-llamaindex-v1` | 1.000 | 0.962 | 0.950 | 166 | 0 |
+| 10 | `cs300-k5-rr-vec-chroma-v1` | 1.000 | 0.962 | 0.950 | 174 | 0 |
+| 11 | `cs300-k5-rr-vec-pgvector-v1` | 1.000 | 0.962 | 0.950 | 187 | 0 |
+| 12 | `cs300-k5-rr-hyb-chroma-v1` | 1.000 | 0.962 | 0.950 | 187 | 0 |
+| 13 | `cs300-k5-rr-hyb-llamaindex-v1` | 1.000 | 0.962 | 0.950 | 197 | 0 |
+| 14 | `cs300-k5-rr-hyb-pgvector-v1` | 1.000 | 0.962 | 0.950 | 198 | 0 |
+| 15 | `cs300-k5-rr-hyb-faiss-v1` | 1.000 | 0.962 | 0.950 | 222 | 0 |
+| 16 | `cs300-k5-rr-vec-faiss-v1` | 1.000 | 0.962 | 0.950 | 225 | 0 |
+| 17 | `cs100-k5-norr-vec-llamaindex-v1` | 1.000 | 0.940 | 0.850 | 13 | 0 |
+| 18 | `cs100-k5-norr-vec-chroma-v1` | 1.000 | 0.940 | 0.850 | 15 | 0 |
+| 19 | `cs100-k5-norr-vec-pgvector-v1` | 1.000 | 0.940 | 0.850 | 16 | 0 |
+| 20 | `cs100-k5-norr-vec-faiss-v1` | 1.000 | 0.940 | 0.850 | 24 | 0 |
+| 21 | `cs300-k5-norr-vec-chroma-v1` (baseline) | 1.000 | 0.925 | 0.850 | 14 | 0 |
+| 22 | `cs300-k5-norr-vec-llamaindex-v1` | 1.000 | 0.925 | 0.850 | 15 | 0 |
+| 23 | `cs300-k5-norr-vec-pgvector-v1` | 1.000 | 0.925 | 0.850 | 18 | 0 |
+| 24 | `cs300-k5-norr-vec-faiss-v1` | 1.000 | 0.925 | 0.850 | 26 | 0 |
+| 25 | `cs100-k5-norr-hyb-chroma-v1` | 0.985 | 0.946 | 0.850 | 18 | 0 |
+| 26 | `cs100-k5-norr-hyb-faiss-v1` | 0.985 | 0.946 | 0.850 | 26 | 0 |
+| 27 | `cs300-k5-norr-hyb-chroma-v1` | 0.985 | 0.930 | 0.850 | 15 | 0 |
+| 28 | `cs300-k5-norr-hyb-faiss-v1` | 0.985 | 0.930 | 0.850 | 26 | 0 |
+| 29 | `cs100-k5-norr-hyb-llamaindex-v1` | 0.985 | 0.923 | 0.850 | 29 | 0 |
+| 30 | `cs100-k5-norr-hyb-pgvector-v1` | 0.985 | 0.912 | 0.850 | 22 | 0 |
+| 31 | `cs300-k5-norr-hyb-llamaindex-v1` | 0.985 | 0.908 | 0.850 | 28 | 0 |
+| 32 | `cs300-k5-norr-hyb-pgvector-v1` | 0.985 | 0.899 | 0.850 | 22 | 0 |
+| 33 | `cs300-k3-norr-hyb-pgvector-v1` | 0.970 | 0.899 | 0.850 | 22 | 0 |
+| 34 | `cs100-k3-rr-hyb-chroma-v1` | 0.955 | 0.965 | 0.950 | 129 | 0 |
+| 35 | `cs100-k3-rr-vec-chroma-v1` | 0.955 | 0.965 | 0.950 | 132 | 0 |
+| 36 | `cs100-k3-rr-vec-llamaindex-v1` | 0.955 | 0.965 | 0.950 | 134 | 0 |
+| 37 | `cs100-k3-rr-vec-pgvector-v1` | 0.955 | 0.965 | 0.950 | 137 | 0 |
+| 38 | `cs100-k3-rr-hyb-pgvector-v1` | 0.955 | 0.965 | 0.950 | 142 | 0 |
+| 39 | `cs100-k3-rr-hyb-llamaindex-v1` | 0.955 | 0.965 | 0.950 | 150 | 0 |
+| 40 | `cs100-k3-rr-vec-faiss-v1` | 0.955 | 0.965 | 0.950 | 165 | 0 |
+| 41 | `cs100-k3-rr-hyb-faiss-v1` | 0.955 | 0.965 | 0.950 | 166 | 0 |
+| 42 | `cs100-k3-norr-hyb-chroma-v1` | 0.955 | 0.939 | 0.850 | 13 | 0 |
+| 43 | `cs100-k3-norr-hyb-faiss-v1` | 0.955 | 0.939 | 0.850 | 21 | 0 |
+| 44 | `cs100-k3-norr-vec-llamaindex-v1` | 0.955 | 0.934 | 0.850 | 12 | 0 |
+| 45 | `cs100-k3-norr-vec-chroma-v1` | 0.955 | 0.934 | 0.850 | 13 | 0 |
+| 46 | `cs100-k3-norr-vec-pgvector-v1` | 0.955 | 0.934 | 0.850 | 14 | 0 |
+| 47 | `cs100-k3-norr-vec-faiss-v1` | 0.955 | 0.934 | 0.850 | 21 | 0 |
+| 48 | `cs300-k3-norr-hyb-chroma-v1` | 0.955 | 0.924 | 0.850 | 15 | 0 |
+| 49 | `cs300-k3-norr-hyb-faiss-v1` | 0.955 | 0.924 | 0.850 | 25 | 0 |
+| 50 | `cs300-k3-norr-vec-llamaindex-v1` | 0.955 | 0.919 | 0.850 | 14 | 0 |
+| 51 | `cs300-k3-norr-vec-chroma-v1` | 0.955 | 0.919 | 0.850 | 16 | 0 |
+| 52 | `cs300-k3-norr-vec-pgvector-v1` | 0.955 | 0.919 | 0.850 | 18 | 0 |
+| 53 | `cs300-k3-norr-vec-faiss-v1` | 0.955 | 0.919 | 0.850 | 25 | 0 |
+| 54 | `cs300-k3-rr-vec-chroma-v1` | 0.939 | 0.955 | 0.950 | 154 | 0 |
+| 55 | `cs300-k3-rr-hyb-llamaindex-v1` | 0.939 | 0.955 | 0.950 | 169 | 0 |
+| 56 | `cs300-k3-rr-hyb-chroma-v1` | 0.939 | 0.955 | 0.950 | 173 | 0 |
+| 57 | `cs300-k3-rr-vec-pgvector-v1` | 0.939 | 0.955 | 0.950 | 177 | 0 |
+| 58 | `cs300-k3-rr-vec-llamaindex-v1` | 0.939 | 0.955 | 0.950 | 179 | 0 |
+| 59 | `cs300-k3-rr-hyb-pgvector-v1` | 0.939 | 0.955 | 0.950 | 203 | 0 |
+| 60 | `cs300-k3-rr-hyb-faiss-v1` | 0.939 | 0.955 | 0.950 | 226 | 0 |
+| 61 | `cs300-k3-rr-vec-faiss-v1` | 0.939 | 0.955 | 0.950 | 227 | 0 |
+| 62 | `cs100-k3-norr-hyb-pgvector-v1` | 0.939 | 0.904 | 0.850 | 23 | 0 |
+| 63 | `cs100-k3-norr-hyb-llamaindex-v1` | 0.924 | 0.909 | 0.850 | 29 | 0 |
+| 64 | `cs300-k3-norr-hyb-llamaindex-v1` | 0.924 | 0.894 | 0.850 | 29 | 0 |
 
-**Effect of each factor** (mean over the 16 configs at each level):
+**Effect of each factor** (mean over all configs at each level):
 
 | Factor | Level | recall@k | MRR | no-answer acc. | p50 ms |
 |---|---|---|---|---|---|
-| rerank | False | 0.973 | 0.932 | 0.850 | 17 |
-| rerank | True | 0.973 | 0.961 | 0.950 | 161 |
-| hybrid | False | 0.975 | 0.946 | 0.900 | 89 |
-| hybrid | True | 0.972 | 0.948 | 0.900 | 89 |
-| chunk_size | 100 | 0.975 | 0.952 | 0.900 | 82 |
-| chunk_size | 300 | 0.972 | 0.942 | 0.900 | 96 |
-| top_k | 3 | 0.951 | 0.944 | 0.900 | 89 |
-| top_k | 5 | 0.996 | 0.949 | 0.900 | 89 |
-| store | chroma | 0.973 | 0.947 | 0.900 | 80 |
-| store | faiss | 0.973 | 0.947 | 0.900 | 98 |
+| rerank | False | 0.972 | 0.925 | 0.850 | 20 |
+| rerank | True | 0.973 | 0.961 | 0.950 | 170 |
+| hybrid | False | 0.975 | 0.946 | 0.900 | 92 |
+| hybrid | True | 0.970 | 0.941 | 0.900 | 97 |
+| chunk_size | 100 | 0.974 | 0.948 | 0.900 | 84 |
+| chunk_size | 300 | 0.971 | 0.938 | 0.900 | 106 |
+| top_k | 3 | 0.949 | 0.941 | 0.900 | 93 |
+| top_k | 5 | 0.996 | 0.946 | 0.900 | 97 |
+| store | chroma | 0.973 | 0.947 | 0.900 | 83 |
+| store | faiss | 0.973 | 0.947 | 0.900 | 111 |
+| store | llamaindex | 0.970 | 0.940 | 0.900 | 92 |
+| store | pgvector | 0.973 | 0.939 | 0.900 | 93 |
 
 ### Which config won, and why
 
-- **Winner: `cs100-k5-rr-vec-chroma-v1`** (recall@5 1.000, MRR 0.965, no-answer accuracy 0.950, p50 128 ms) vs baseline `cs300-k5-norr-vec-chroma-v1` (recall@5 1.000, MRR 0.925, no-answer accuracy 0.850, p50 16 ms).
-- **Reranking is the factor that matters.** Averaged over the grid it raises MRR from 0.932 to 0.961 and no-answer accuracy from 0.850 to 0.950: the cross-encoder logit is a much better "is this actually relevant?" signal than cosine similarity, so the refusal threshold works. The price is latency (17 ms to 161 ms p50), almost all of it the cross-encoder on CPU.
-- **Hybrid (BM25 + RRF) made no measurable difference here** (MRR 0.946 vector-only vs 0.948 hybrid). The corpus is small and clean, and bge-small already handles exact codes like VPN-809. Production keeps hybrid on because BM25 costs ~0.23 ms and is cheap insurance for identifier-heavy queries this golden set does not stress, but this is a judgment call, not something the numbers prove.
-- **Chunk size 100 vs 300:** MRR 0.952 vs 0.942, p50 82 vs 96 ms. The latency gain is consistent with the cross-encoder scoring shorter (query, chunk) pairs. The quality difference is within one question. Most sections in these documents are shorter than 150 tokens, which is why the grid uses 100 vs 300 rather than 300 vs 500 (at 300 and 500 the chunks would be identical).
-- **top-k 3 vs 5:** recall 0.951 vs 0.996. In the production config at k=3 the misses were the second source of two multi-document questions (q23, q26) and one single-source question (q20) whose answer chunk ranked 4th.
-- **Chroma vs FAISS:** identical retrieval quality on ~90 chunks. End-to-end p50 was 98 ms for FAISS vs 80 ms for Chroma. A direct micro-benchmark (200 queries, top-20, role filter) measured the store calls at about 2.8 ms (FAISS) vs 1.5 ms (Chroma), and building the FAISS role selector at 0.03 ms, so the store itself explains only a small part of the gap. The rest is unexplained; I did not profile further (one guess is thread contention between FAISS's OpenMP pool and PyTorch, which is untested). At this size the choice of store doesn't matter for quality; Chroma stays as the main store because it supports metadata filters, persistence and a client/server mode out of the box.
+- **Winner: `cs100-k5-rr-vec-chroma-v1`** (recall@5 1.000, MRR 0.965, no-answer accuracy 0.950, p50 132 ms) vs baseline `cs300-k5-norr-vec-chroma-v1` (recall@5 1.000, MRR 0.925, no-answer accuracy 0.850, p50 14 ms).
+- **Reranking is the factor that matters.** Averaged over the grid it raises MRR from 0.925 to 0.961 and no-answer accuracy from 0.850 to 0.950: the cross-encoder logit is a much better "is this actually relevant?" signal than cosine similarity, so the refusal threshold works. The price is latency (20 ms to 170 ms p50), almost all of it the cross-encoder on CPU.
+- **Hybrid (BM25 + RRF) made no measurable difference here** (MRR 0.946 vector-only vs 0.941 hybrid). The corpus is small and clean, and bge-small already handles exact codes like VPN-809. Production keeps hybrid on because BM25 costs ~0.24 ms and is cheap insurance for identifier-heavy queries this golden set does not stress, but this is a judgment call, not something the numbers prove.
+- **Chunk size 100 vs 300:** MRR 0.948 vs 0.938, p50 84 vs 106 ms. The latency gain is consistent with the cross-encoder scoring shorter (query, chunk) pairs. The quality difference is within one question. Most sections in these documents are shorter than 150 tokens, which is why the grid uses 100 vs 300 rather than 300 vs 500 (at 300 and 500 the chunks would be identical).
+- **top-k 3 vs 5:** recall 0.949 vs 0.996. In the production config at k=3 the misses were the second source of two multi-document questions (q23, q26) and one single-source question (q20) whose answer chunk ranked 4th.
+- **Stores and frameworks** (same chunks, same embedding model, same role filter; hybrid means Python BM25 + RRF for Chroma/FAISS, Postgres full-text + RRF in one SQL query for pgvector, and BM25Retriever + QueryFusionRetriever for LlamaIndex):
+
+  | Settings | chroma | faiss | pgvector | llamaindex |
+  |---|---|---|---|---|
+  | chunk 300, k 5, rerank, hybrid (production settings) | MRR 0.962, p50 187 ms | MRR 0.962, p50 222 ms | MRR 0.962, p50 198 ms | MRR 0.962, p50 197 ms |
+  | chunk 300, k 5, no rerank, hybrid | MRR 0.930, p50 15 ms | MRR 0.930, p50 26 ms | MRR 0.899, p50 22 ms | MRR 0.908, p50 28 ms |
+  | chunk 300, k 5, no rerank, vector-only | MRR 0.925, p50 14 ms | MRR 0.925, p50 26 ms | MRR 0.925, p50 18 ms | MRR 0.925, p50 15 ms |
+
+  Raw store call, top-20 with the role filter, median over 40 queries x 5 (`reports/store_microbench.json`): chroma 1.498 ms; faiss 2.894 ms; pgvector 2.202 ms; pgvector_hybrid_sql 2.475 ms; llamaindex_vector_incl_embedding 12.4 ms. At ~90 chunks every store answers in a few milliseconds, so end-to-end differences in the grid come mostly from reranking and run-to-run noise, not from the store.
+  Reading: with reranking on, all stacks reach the same quality, because the cross-encoder decides the final ranking. Without reranking, the keyword side matters. Hybrid vs vector-only MRR (chunk 300, k 5): chroma 0.930 vs 0.925 (higher); faiss 0.930 vs 0.925 (higher); pgvector 0.899 vs 0.925 (lower); llamaindex 0.908 vs 0.925 (lower). Differences of this size are one or two questions out of 40. Chroma stays the default when there is no Postgres; with DATABASE_URL set, `VECTOR_BACKEND=auto` uses pgvector so data, vectors and keyword search live in one database (one backup, one access-control model, joins with business data).
 - **Production config:** rerank on, hybrid on, top-k 5, Chroma, chunk size 300. Switching to 100-token chunks would cut retrieval latency, but whether smaller chunks hurt answer faithfulness is what the generation eval (section 4) is for; the switch waits for that result.
 - **Caveat:** 40 questions on 12 documents is small; recall saturates at 1.0 for many configs, so the grid separates configs mainly on MRR, refusals and latency.
 

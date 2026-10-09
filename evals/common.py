@@ -40,7 +40,7 @@ class EvalConfig:
     top_k: int = 5
     rerank: bool = True
     hybrid: bool = True
-    store: str = "chroma"  # chroma | faiss
+    store: str = "chroma"  # chroma | faiss | pgvector | llamaindex (LlamaIndex stack over the same chunks)
     prompt_version: str = "v1"
 
     @property
@@ -58,6 +58,13 @@ BASELINE = EvalConfig(chunk_size=300, top_k=5, rerank=False, hybrid=False, store
 PRODUCTION = EvalConfig(chunk_size=300, top_k=5, rerank=True, hybrid=True, store="chroma")
 
 
+def eval_database_url() -> str:
+    """Postgres for pgvector eval rows: EVAL_DATABASE_URL, else DATABASE_URL, else '' (rows not run)."""
+    import os
+
+    return os.environ.get("EVAL_DATABASE_URL") or get_settings().database_url
+
+
 @lru_cache(maxsize=8)
 def build_store(chunk_size: int, store: str) -> VectorStore:
     """Index the corpus once per (chunk_size, store) with an isolated registry + fake Redis."""
@@ -69,6 +76,14 @@ def build_store(chunk_size: int, store: str) -> VectorStore:
     emb = get_embedder()
     if store == "faiss":
         vs: VectorStore = FaissStore(dim=emb.dim)  # in memory
+    elif store == "pgvector":
+        from app.retrieval.vectorstore.pgvector_store import PgVectorStore
+
+        if not eval_database_url():
+            raise RuntimeError("pgvector eval needs EVAL_DATABASE_URL or DATABASE_URL")
+        vs = PgVectorStore(eval_database_url(), collection=f"eval_cs{chunk_size}", dim=emb.dim)
+        vs.drop()  # fresh table so the run is reproducible
+        vs = PgVectorStore(eval_database_url(), collection=f"eval_cs{chunk_size}", dim=emb.dim)
     else:
         vs = ChromaStore(collection=f"eval_cs{chunk_size}", path=INDEX_DIR / "chroma")
     s = get_settings()
@@ -86,12 +101,12 @@ def build_store(chunk_size: int, store: str) -> VectorStore:
             chunk_size=chunk_size,
             overlap=max(10, chunk_size * 15 // 100),
             # FAISS lives in memory, so it always needs indexing; Chroma persists between runs.
-            force=(store == "faiss"),
+            force=store in ("faiss", "pgvector"),
         )
     return vs
 
 
-def make_retriever(cfg: EvalConfig) -> HybridRetriever:
+def make_retriever(cfg: EvalConfig):
     s = get_settings()
     rc = RetrievalConfig(
         candidate_k=s.candidate_k,
@@ -100,7 +115,25 @@ def make_retriever(cfg: EvalConfig) -> HybridRetriever:
         use_rerank=cfg.rerank,
         rerank_threshold=s.relevance_threshold,
     )
+    if cfg.store == "llamaindex":
+        return _llamaindex_retriever(cfg.chunk_size, rc)
     return HybridRetriever(build_store(cfg.chunk_size, cfg.store), get_embedder(), get_reranker(), rc)
+
+
+_LI_CACHE: dict = {}
+
+
+def _llamaindex_retriever(chunk_size: int, rc: RetrievalConfig):
+    """LlamaIndex stack over the SAME chunks as the Chroma index for this chunk size."""
+    from app.retrieval.llamaindex_retriever import LlamaIndexRetriever
+
+    if chunk_size not in _LI_CACHE:
+        _LI_CACHE[chunk_size] = LlamaIndexRetriever(
+            build_store(chunk_size, "chroma"), get_embedder(), get_settings().reranker_model, rc
+        )
+    r = _LI_CACHE[chunk_size]
+    r.config = rc  # index + BM25 are reused; only the knobs change
+    return r
 
 
 def search_text(q: dict) -> str:
