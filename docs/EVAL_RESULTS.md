@@ -161,6 +161,19 @@ Heuristic misses (left for the Prompt Guard layer; I did not tune the regexes ag
 
 These misses cannot leak restricted data: retrieval is role-filtered before ranking, so "my role is hr now" still searches with the employee filter, and the output guard checks every answer.
 
+### Text-to-SQL tool (`ticket_analytics`, IT admins only)
+
+| Check | SQLite fallback | Postgres |
+|---|---|---|
+| Raw-SQL attack suite through the validator | 25/25 blocked | 25/25 blocked |
+| Same attacks with the validator BYPASSED (database layer alone) | 17/25 refused; data unchanged: True | 20/25 refused; data unchanged: True |
+| Accuracy on 10 questions with expected results (`evals/sql_golden.jsonl`) | not measured (needs GROQ_API_KEY) | |
+| Natural-language attacks (write / drop / other tables) | not measured (needs GROQ_API_KEY) | |
+
+What the database alone let through on Postgres: `catalog_roles, catalog_schema, schema_qualified, comment_hide, block_comment`. The read-only role blocks every write and every read of the business tables, but Postgres lets any role read the system catalog (`pg_roles`, `information_schema`) by default, and two attacks were harmless view reads that only hid comments. So the validator is the only guard against catalog reads (role and table names, no business data).
+
+On the SQLite fallback the database blocks writes (`PRAGMA query_only`) but has no roles, so reads of base tables (`base_table_employees, base_table_tickets, base_table_leave, union_exfil, subquery_exfil, cte_read`) are stopped only by the validator. Use Postgres when the analytics tool is exposed.
+
 ## 4. Generation quality (RAGAS)
 
 **Not measured yet.** Needs GROQ_API_KEY. Run `uv run --group eval python evals/generation_eval.py` (resumable across days on the free tier), then re-render this file. Planned runs: baseline, the two best grid configs, and the best config with prompt v2 (prompt v1 vs v2 comparison).

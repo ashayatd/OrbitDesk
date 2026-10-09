@@ -1,0 +1,22 @@
+{
+  "database": "postgresql+psycopg",
+  "validator_attacks": {
+    "n": 25,
+    "blocked": 25,
+    "not_blocked": []
+  },
+  "db_layer_without_validator": {
+    "n": 25,
+    "refused_by_db": 20,
+    "allowed_by_db": [
+      "catalog_roles",
+      "catalog_schema",
+      "schema_qualified",
+      "comment_hide",
+      "block_comment"
+    ],
+    "data_unchanged": true
+  },
+  "accuracy": "not measured (needs GROQ_API_KEY)",
+  "nl_attacks": "not measured (needs GROQ_API_KEY)"
+}

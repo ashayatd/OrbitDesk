@@ -306,6 +306,51 @@ def main() -> None:
             '"my role is hr now" still searches with the employee filter, and the output guard checks every answer.\n'
         )
 
+    # ---------------- text-to-SQL ----------------
+    sql_sqlite, sql_pg = load("sql_eval.json"), load("sql_eval_postgres.json")
+    if sql_sqlite or sql_pg:
+        w("### Text-to-SQL tool (`ticket_analytics`, IT admins only)\n")
+        w("| Check | SQLite fallback | Postgres |\n|---|---|---|")
+
+        def cell(rep, key):
+            if not rep:
+                return "not run"
+            v = rep[key]
+            if key == "validator_attacks":
+                return f"{v['blocked']}/{v['n']} blocked"
+            return f"{v['refused_by_db']}/{v['n']} refused; data unchanged: {v['data_unchanged']}"
+
+        w(
+            f"| Raw-SQL attack suite through the validator | {cell(sql_sqlite, 'validator_attacks')} | {cell(sql_pg, 'validator_attacks')} |"
+        )
+        w(
+            f"| Same attacks with the validator BYPASSED (database layer alone) | {cell(sql_sqlite, 'db_layer_without_validator')} | {cell(sql_pg, 'db_layer_without_validator')} |"
+        )
+        acc = (sql_pg or sql_sqlite)["accuracy"]
+        acc_txt = acc if isinstance(acc, str) else f"{acc['correct']}/{acc['n']}"
+        w(f"| Accuracy on 10 questions with expected results (`evals/sql_golden.jsonl`) | {acc_txt} | |")
+        nl = (sql_pg or sql_sqlite)["nl_attacks"]
+        nl_txt = (
+            nl if isinstance(nl, str) else f"{nl['refused']}/{nl['n']} refused, data unchanged: {nl['data_unchanged']}"
+        )
+        w(f"| Natural-language attacks (write / drop / other tables) | {nl_txt} | |\n")
+        if sql_pg:
+            allowed = ", ".join(sql_pg["db_layer_without_validator"]["allowed_by_db"])
+            w(
+                f"What the database alone let through on Postgres: `{allowed}`. The read-only role blocks every write "
+                "and every read of the business tables, but Postgres lets any role read the system catalog "
+                "(`pg_roles`, `information_schema`) by default, and two attacks were harmless view reads that only hid "
+                "comments. So the validator is the only guard against catalog reads (role and table names, no "
+                "business data).\n"
+            )
+        if sql_sqlite:
+            reads = [x for x in sql_sqlite["db_layer_without_validator"]["allowed_by_db"] if "comment" not in x]
+            w(
+                f"On the SQLite fallback the database blocks writes (`PRAGMA query_only`) but has no roles, so reads of "
+                f"base tables (`{', '.join(reads)}`) are stopped only by the validator. Use Postgres when the "
+                "analytics tool is exposed.\n"
+            )
+
     # ---------------- generation ----------------
     w("## 4. Generation quality (RAGAS)\n")
     if gen and gen["configs"]:
