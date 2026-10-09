@@ -49,7 +49,10 @@ def main() -> None:
                 "p95": round(sorted(times)[int(0.95 * len(times))], 3),
             }
     li = make_retriever(EvalConfig(store="llamaindex", rerank=False, hybrid=False))
-    vec = li.index.as_retriever(similarity_top_k=20)
+    from llama_index.core.vector_stores import ExactMatchFilter, MetadataFilters
+
+    role_filter = MetadataFilters(filters=[ExactMatchFilter(key="role_employee", value=1)])
+    vec = li.index.as_retriever(similarity_top_k=20, filters=role_filter)
     times = []
     for _ in range(REPEATS):
         for q in queries:
