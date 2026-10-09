@@ -55,7 +55,16 @@ eval = [
     "alembic>=1.13",  # MLflow's SQLite backend (the plain file store is in maintenance mode)
 ]
 finetuned = [
+    # runtime: ROUTER_MODE=finetuned loads the LoRA adapter on CPU
     "peft>=0.12",
+]
+finetune = [
+    # training (Colab T4). bitsandbytes (4-bit QLoRA) is installed in the notebook: it needs CUDA.
+    "peft>=0.12",
+    "trl==1.14.2",  # 1.15 forces a Triton-only fused LM head (Linux only); the notebook pins the same version
+    "accelerate>=1.0",
+    "datasets>=2.20",
+    "scikit-learn>=1.4",
 ]
 
 [tool.uv]

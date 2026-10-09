@@ -22,6 +22,7 @@ from app.config import get_settings
 from app.llm.client import get_llm
 from app.llm.usage import Usage
 from app.log import get_logger
+from app.observability.tracing import traced
 from app.rag.prompts import load_prompt
 
 log = get_logger(__name__)
@@ -79,7 +80,7 @@ class PromptRouter:
     def route(self, message: str, usage: Usage | None = None) -> RouteDecision:
         t0 = time.perf_counter()
         msgs = router_messages(message, self.few_shot)
-        resp = get_llm(self.model_tier, max_tokens=30).invoke(msgs)
+        resp = get_llm(self.model_tier, max_tokens=30).invoke(msgs, config=traced(usage))
         if usage is not None:
             usage.add_message("router", resp, prompt_chars=sum(len(str(m.content)) for m in msgs))
         ms = round((time.perf_counter() - t0) * 1000, 1)
@@ -112,9 +113,12 @@ class FinetunedRouter:
             {"role": "system", "content": p["system"]},
             {"role": "user", "content": p["user_template"].format(message=message)},
         ]
-        ids = self.tokenizer.apply_chat_template(chat, add_generation_prompt=True, return_tensors="pt")
+        enc = self.tokenizer.apply_chat_template(
+            chat, add_generation_prompt=True, return_tensors="pt", return_dict=True
+        )
+        ids = enc["input_ids"]
         with torch.no_grad():
-            out = self.model.generate(ids, max_new_tokens=24, do_sample=False)
+            out = self.model.generate(**enc, max_new_tokens=24, do_sample=False)
         text = self.tokenizer.decode(out[0][ids.shape[1] :], skip_special_tokens=True)
         ms = round((time.perf_counter() - t0) * 1000, 1)
         parsed = parse_route(text)

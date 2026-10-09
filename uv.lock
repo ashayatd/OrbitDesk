@@ -1860,6 +1860,13 @@ eval = [
     { name = "mlflow-skinny" },
     { name = "ragas" },
 ]
+finetune = [
+    { name = "accelerate" },
+    { name = "datasets" },
+    { name = "peft" },
+    { name = "scikit-learn" },
+    { name = "trl" },
+]
 finetuned = [
     { name = "peft" },
 ]
@@ -1908,6 +1915,13 @@ eval = [
     { name = "datasets", specifier = ">=2.20" },
     { name = "mlflow-skinny", specifier = ">=3.0" },
     { name = "ragas", specifier = ">=0.4.3" },
+]
+finetune = [
+    { name = "accelerate", specifier = ">=1.0" },
+    { name = "datasets", specifier = ">=2.20" },
+    { name = "peft", specifier = ">=0.12" },
+    { name = "scikit-learn", specifier = ">=1.4" },
+    { name = "trl", specifier = "==1.14.2" },
 ]
 finetuned = [{ name = "peft", specifier = ">=0.12" }]
 
@@ -3008,6 +3022,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/65/4c/70012ed0795235fb6bd7806fafd4a1842f03e49ebbfa3bb9580e451948ce/transformers-5.19.0.tar.gz", hash = "sha256:87f38dd25e4521151b97e94520ac457f44a0ae8a8358a5b112daff6c64a822d6", size = 10032022, upload-time = "2026-10-06T16:39:00.229Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/59/1e7f1212c215c73690ae6cab4678efe1555ff985953e145d88cc212859b0/transformers-5.19.0-py3-none-any.whl", hash = "sha256:afcd2dd5f603ed28c1e1fcb00a338ccbb4ef5f878ed289635df8b58187afb518", size = 12599123, upload-time = "2026-10-06T16:38:56.794Z" },
+]
+
+[[package]]
+name = "trl"
+version = "1.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "datasets" },
+    { name = "jinja2" },
+    { name = "packaging" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/00/7f/eaa2c1b3a54c3125abe472d519309f4010d933fed24d0bf1ecea94313c0b/trl-1.14.2.tar.gz", hash = "sha256:0e6630587c5da50d5574b9fcbaa55540304e7c9aee60763c034f5d2c9e3b5b4d", size = 766266, upload-time = "2026-10-06T20:29:52.627Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2b/d7/dcd5cdd98a1e34eb8d90ae579042bebe7b3a06a30f41a08c844bee30a8c1/trl-1.14.2-py3-none-any.whl", hash = "sha256:bd97adb0284f2520ae8c5ebf243e2e4b3cbe50f09cb5964547e38dfc1d37694e", size = 927216, upload-time = "2026-10-06T20:29:51.159Z" },
 ]
 
 [[package]]

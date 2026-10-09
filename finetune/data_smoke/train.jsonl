@@ -1,0 +1,16 @@
+{"message": "How many sick days do we get per year?", "intent": "policy_question", "urgency": "low"}
+{"message": "I keep getting VPN-809 and can't reach anything, client demo in 20 minutes!", "intent": "policy_question", "urgency": "high"}
+{"message": "How many leave days do I have left?", "intent": "action", "urgency": "low"}
+{"message": "My laptop was stolen from my car, please open a ticket now", "intent": "action", "urgency": "high"}
+{"message": "What's the status of TCK-1002?", "intent": "action", "urgency": "low"}
+{"message": "thanks, that helped!", "intent": "small_talk", "urgency": "low"}
+{"message": "Write me a Python script to scrape LinkedIn", "intent": "out_of_scope", "urgency": "low"}
+{"message": "Expense report is due Friday and the portal won't accept my receipt, how do I submit a missing receipt?", "intent": "policy_question", "urgency": "medium"}
+{"message": "hello there!", "intent": "small_talk", "urgency": "low"}
+{"message": "what is the capital of France", "intent": "out_of_scope", "urgency": "low"}
+{"message": "raise a ticket, my monitor flickers", "intent": "action", "urgency": "medium"}
+{"message": "how do I request annual leave?", "intent": "policy_question", "urgency": "low"}
+{"message": "phishing link clicked, help, open P1 ticket", "intent": "action", "urgency": "high"}
+{"message": "how many sick days per year", "intent": "policy_question", "urgency": "low"}
+{"message": "thank you so much", "intent": "small_talk", "urgency": "low"}
+{"message": "write a poem about cats", "intent": "out_of_scope", "urgency": "low"}

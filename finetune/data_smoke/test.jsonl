@@ -1,0 +1,4 @@
+{"message": "How many sick days do we get per year?", "intent": "policy_question", "urgency": "low"}
+{"message": "I keep getting VPN-809 and can't reach anything, client demo in 20 minutes!", "intent": "policy_question", "urgency": "high"}
+{"message": "How many leave days do I have left?", "intent": "action", "urgency": "low"}
+{"message": "My laptop was stolen from my car, please open a ticket now", "intent": "action", "urgency": "high"}

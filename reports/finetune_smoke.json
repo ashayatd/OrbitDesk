@@ -1,0 +1,45 @@
+{
+  "what": "CPU smoke test of the QLoRA training code path (no 4-bit on CPU). NOT a quality result: 2 steps on 16 hand-written examples.",
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "trl": "1.14.2",
+  "device": "cpu",
+  "machine": "Windows-10-10.0.26200-SP0",
+  "train_steps": 2,
+  "train_examples": 16,
+  "train_runtime_s": 1101.0,
+  "loss_per_step": [
+    0.2789,
+    0.125
+  ],
+  "inference": {
+    "strict_json_parsed": 4,
+    "n": 4,
+    "latency_ms_median_cpu_fp32_unmerged_lora": 4503.8
+  },
+  "outputs": [
+    {
+      "message": "How many sick days do I get?",
+      "intent": "action",
+      "urgency": "low",
+      "parsed": true
+    },
+    {
+      "message": "my laptop was stolen, open a ticket",
+      "intent": "action",
+      "urgency": "high",
+      "parsed": true
+    },
+    {
+      "message": "thanks!",
+      "intent": "small_talk",
+      "urgency": "low",
+      "parsed": true
+    },
+    {
+      "message": "write me a poem",
+      "intent": "action",
+      "urgency": "low",
+      "parsed": true
+    }
+  ]
+}
