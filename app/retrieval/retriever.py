@@ -56,8 +56,11 @@ class HybridRetriever:
     def embed(self, query: str):
         return self.embedder.embed_query(query)
 
-    def retrieve(self, query: str, role: str, index_version: int = 0, qvec=None) -> RetrievalResult:
-        """qvec: pass the query embedding if the caller already computed it (semantic cache lookup)."""
+    def retrieve(
+        self, query: str, role: str, index_version: int = 0, qvec=None, department: str | None = None
+    ) -> RetrievalResult:
+        """qvec: pass the query embedding if the caller already computed it (semantic cache lookup).
+        department: restrict to one department's documents (e.g. "IT" runbooks for /image)."""
         cfg = self.config
         t: dict[str, float] = {}
 
@@ -67,12 +70,12 @@ class HybridRetriever:
             t["embed_query"] = _ms(t0)
 
         t0 = time.perf_counter()
-        vector_hits = self.store.query(qvec, cfg.candidate_k, role)
+        vector_hits = self.store.query(qvec, cfg.candidate_k, role, department)
         t["vector_search"] = _ms(t0)
 
         if cfg.use_hybrid:
             t0 = time.perf_counter()
-            bm25_hits = self.bm25.for_role(role, index_version).search(query, cfg.candidate_k)
+            bm25_hits = self.bm25.for_role(role, index_version, department).search(query, cfg.candidate_k)
             t["bm25_search"] = _ms(t0)
             t0 = time.perf_counter()
             candidates = reciprocal_rank_fusion([vector_hits, bm25_hits])[: cfg.candidate_k]

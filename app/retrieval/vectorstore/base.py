@@ -23,12 +23,12 @@ class VectorStore(Protocol):
 
     def ids_for_doc(self, doc_id: str) -> list[str]: ...
 
-    def query(self, embedding: np.ndarray, k: int, role: str) -> list[ScoredChunk]:
-        """Top-k by cosine similarity among chunks the role may see.
-        The role filter is applied INSIDE the search, never after it."""
+    def query(self, embedding: np.ndarray, k: int, role: str, department: str | None = None) -> list[ScoredChunk]:
+        """Top-k by cosine similarity among chunks the role may see (optionally one department).
+        Filters are applied INSIDE the search, never after it."""
         ...
 
-    def all_chunks(self, role: str | None = None) -> list[Chunk]:
+    def all_chunks(self, role: str | None = None, department: str | None = None) -> list[Chunk]:
         """Every chunk (optionally only those visible to `role`); used to build BM25."""
         ...
 

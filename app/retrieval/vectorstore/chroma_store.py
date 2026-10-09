@@ -47,11 +47,20 @@ class ChromaStore:
     def ids_for_doc(self, doc_id: str) -> list[str]:
         return self.col.get(where={"doc_id": doc_id}, include=[])["ids"]
 
-    def query(self, embedding: np.ndarray, k: int, role: str) -> list[ScoredChunk]:
+    @staticmethod
+    def _where(role: str | None, department: str | None) -> dict | None:
+        clauses = [{f"role_{role}": True}] if role else []
+        if department:
+            clauses.append({"department": department})
+        if not clauses:
+            return None
+        return clauses[0] if len(clauses) == 1 else {"$and": clauses}
+
+    def query(self, embedding: np.ndarray, k: int, role: str, department: str | None = None) -> list[ScoredChunk]:
         res = self.col.query(
             query_embeddings=[embedding.tolist()],
             n_results=k,
-            where={f"role_{role}": True},  # pre-filter: HNSW search only over allowed chunks
+            where=self._where(role, department),  # pre-filter: HNSW search only over allowed chunks
             include=["documents", "metadatas", "distances"],
         )
         out = []
@@ -61,9 +70,8 @@ class ChromaStore:
             out.append(ScoredChunk(Chunk(cid, meta["doc_id"], doc, dict(meta)), 1.0 - dist, "vector"))
         return out
 
-    def all_chunks(self, role: str | None = None) -> list[Chunk]:
-        where = {f"role_{role}": True} if role else None
-        res = self.col.get(where=where, include=["documents", "metadatas"])
+    def all_chunks(self, role: str | None = None, department: str | None = None) -> list[Chunk]:
+        res = self.col.get(where=self._where(role, department), include=["documents", "metadatas"])
         return [
             Chunk(cid, meta["doc_id"], doc, dict(meta))
             for cid, doc, meta in zip(res["ids"], res["documents"], res["metadatas"], strict=True)

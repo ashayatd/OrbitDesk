@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from app.api import agent, ask, health, ingest
+from app.api import agent, ask, health, ingest, multimodal
 from app.config import get_settings
 from app.errors import InputRejectedError, LLMUnavailableError, RateLimitedError
 from app.log import configure_logging, get_logger
@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(ingest.router)
     app.include_router(ask.router)
     app.include_router(agent.router)
+    app.include_router(multimodal.router)
 
     @app.exception_handler(LLMUnavailableError)
     async def _llm_unavailable(_: Request, exc: LLMUnavailableError) -> JSONResponse:
@@ -63,8 +64,14 @@ def create_app() -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def root() -> RedirectResponse:
-        return RedirectResponse("/docs")
+        return RedirectResponse("/ui" if get_settings().mount_ui else "/docs")
 
+    if get_settings().mount_ui:
+        import gradio as gr
+
+        from app.ui.gradio_app import build_ui
+
+        app = gr.mount_gradio_app(app, build_ui(), path="/ui")
     return app
 
 

@@ -16,6 +16,7 @@ os.environ.update(
         "REDIS_URL": "fakeredis://",
         "QUEUE_MODE": "inline",
         "INGEST_ON_STARTUP": "false",
+        "MOUNT_UI": "false",  # test_ui.py builds the UI explicitly
         "DATA_DIR": tempfile.mkdtemp(prefix="orbitdesk-test-"),  # never touch the real data/ dir
     }
 )

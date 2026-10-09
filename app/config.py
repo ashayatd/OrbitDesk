@@ -31,8 +31,10 @@ class Settings(BaseSettings):
     # --- Optional second provider (OpenRouter, OpenAI-compatible API) ---
     fallback_provider_key: str = ""
     fallback_base_url: str = "https://openrouter.ai/api/v1"
-    fallback_chat_model: str = "meta-llama/llama-3.3-70b-instruct:free"
-    fallback_vision_model: str = "qwen/qwen2.5-vl-72b-instruct:free"
+    # Verified against https://openrouter.ai/api/v1/models on 2026-10-09 (free, image input + tools).
+    # Free model ids change often: override with FALLBACK_CHAT_MODEL / FALLBACK_VISION_MODEL.
+    fallback_chat_model: str = "google/gemma-4-31b-it:free"
+    fallback_vision_model: str = "google/gemma-4-31b-it:free"
 
     # --- Langfuse ---
     langfuse_public_key: str = ""
@@ -55,6 +57,7 @@ class Settings(BaseSettings):
     prompts_dir: Path = ROOT_DIR / "prompts"
     reports_dir: Path = ROOT_DIR / "reports"
     ingest_on_startup: bool = True
+    mount_ui: bool = True
 
     # --- Retrieval ---
     embedding_model: str = "BAAI/bge-small-en-v1.5"

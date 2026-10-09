@@ -12,6 +12,7 @@ class AskRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=100)
     role: Role = "employee"
     stream: bool = True
+    department: str | None = Field(None, description="optional filter, e.g. IT (used by /image)")
 
 
 class CitationOut(BaseModel):

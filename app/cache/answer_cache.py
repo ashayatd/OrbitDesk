@@ -42,8 +42,8 @@ class AnswerCache:
         self.threshold = semantic_threshold
 
     @staticmethod
-    def namespace(index_version: int, role: str, prompt_version: str) -> str:
-        return f"v{index_version}:{role}:{prompt_version}"
+    def namespace(index_version: int, role: str, prompt_version: str, department: str | None = None) -> str:
+        return f"v{index_version}:{role}:{prompt_version}" + (f":{department}" if department else "")
 
     def _exact_key(self, ns: str, question: str) -> str:
         return f"cache:exact:{ns}:{hashlib.sha256(normalise(question).encode()).hexdigest()}"

@@ -42,13 +42,13 @@ class BM25Registry:
 
     def __init__(self, store: VectorStore) -> None:
         self.store = store
-        self._cache: dict[tuple[str, int], BM25Index] = {}
+        self._cache: dict[tuple[str, int, str | None], BM25Index] = {}
         self._lock = threading.Lock()
 
-    def for_role(self, role: str, index_version: int) -> BM25Index:
-        key = (role, index_version)
+    def for_role(self, role: str, index_version: int, department: str | None = None) -> BM25Index:
+        key = (role, index_version, department)
         with self._lock:
             if key not in self._cache:
                 self._cache = {k: v for k, v in self._cache.items() if k[1] == index_version}  # drop stale
-                self._cache[key] = BM25Index(self.store.all_chunks(role))
+                self._cache[key] = BM25Index(self.store.all_chunks(role, department))
             return self._cache[key]

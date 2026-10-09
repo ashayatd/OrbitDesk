@@ -70,8 +70,14 @@ class FaissStore:
     def ids_for_doc(self, doc_id: str) -> list[str]:
         return [c.chunk_id for c in self.chunks.values() if c.doc_id == doc_id]
 
-    def query(self, embedding: np.ndarray, k: int, role: str) -> list[ScoredChunk]:
-        allowed = np.array([i for i, c in self.chunks.items() if c.metadata.get(f"role_{role}")], dtype=np.int64)
+    @staticmethod
+    def _visible(c: Chunk, role: str | None, department: str | None) -> bool:
+        return (role is None or bool(c.metadata.get(f"role_{role}"))) and (
+            department is None or c.metadata.get("department") == department
+        )
+
+    def query(self, embedding: np.ndarray, k: int, role: str, department: str | None = None) -> list[ScoredChunk]:
+        allowed = np.array([i for i, c in self.chunks.items() if self._visible(c, role, department)], dtype=np.int64)
         if allowed.size == 0:
             return []
         params = faiss.SearchParameters(sel=faiss.IDSelectorBatch(allowed))
@@ -80,8 +86,8 @@ class FaissStore:
             ScoredChunk(self.chunks[i], float(s), "vector") for s, i in zip(scores[0], ids[0], strict=True) if i != -1
         ]
 
-    def all_chunks(self, role: str | None = None) -> list[Chunk]:
-        return [c for c in self.chunks.values() if role is None or c.metadata.get(f"role_{role}")]
+    def all_chunks(self, role: str | None = None, department: str | None = None) -> list[Chunk]:
+        return [c for c in self.chunks.values() if self._visible(c, role, department)]
 
     def count(self) -> int:
         return len(self.chunks)

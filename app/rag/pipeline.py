@@ -115,7 +115,7 @@ class RagPipeline:
         index_version = get_index_version(self.r)
         qvec = None
         if self.cache:
-            ns = AnswerCache.namespace(index_version, req.role, self.prompt_version)
+            ns = AnswerCache.namespace(index_version, req.role, self.prompt_version, req.department)
             t0 = time.perf_counter()
             hit, kind = self.cache.get_exact(ns, query), "exact"
             if hit is None:
@@ -135,7 +135,7 @@ class RagPipeline:
                 return
 
         # 3. Retrieval (role pre-filter inside), then drop chunks that look like injected instructions
-        retrieval = self.retriever.retrieve(query, req.role, index_version, qvec=qvec)
+        retrieval = self.retriever.retrieve(query, req.role, index_version, qvec=qvec, department=req.department)
         timings.update(retrieval.timings_ms)
         clean = [sc for sc in retrieval.chunks if not is_suspicious_chunk(sc.chunk.text)]
         if len(clean) < len(retrieval.chunks):
@@ -200,7 +200,7 @@ class RagPipeline:
         yield "result", result
 
         if self.cache and "output_blocked" not in guard:
-            ns = AnswerCache.namespace(index_version, req.role, self.prompt_version)
+            ns = AnswerCache.namespace(index_version, req.role, self.prompt_version, req.department)
             self.cache.put(ns, query, qvec if qvec is not None else self.retriever.embed(query), result.model_dump())
         if use_memory:  # after the result, so summarisation never delays the user
             self.memory.append(req.session_id, question, answer)
